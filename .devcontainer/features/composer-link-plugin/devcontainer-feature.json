@@ -1,0 +1,9 @@
+{
+  "id": "composer-link-plugin",
+  "version": "1.0.0",
+  "name": "Composer Link Plugin",
+  "description": "Installs the composer-link plugin globally",
+  "options": {},
+  "installsAfter": []
+}
+

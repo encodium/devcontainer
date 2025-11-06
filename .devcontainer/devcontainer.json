@@ -1,0 +1,57 @@
+{
+  "name": "Local Development",
+  "dockerComposeFile": "compose.yaml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "none",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": "true",
+      "installOhMyZsh": true,
+      "upgradePackages": false
+    },
+    "./features/homebrew": {
+      "shallowClone": true
+    },
+    "./features/tools": {
+      "packages": ["kubectl", "helm", "vault", "mysql-client", "redis", "fnm", "gh"]
+    },
+    "./features/composer-link-plugin": {}
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/workspace,target=/workspace,type=bind,consistency=cached",
+    "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind",
+    "source=local-data,target=/home/vscode/.devcontainer-storage,type=volume"
+  ],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
+  },
+  "containerEnv": {
+    "USERNAME": "vscode"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "xdebug.php-debug",
+        "eamodio.gitlens",
+        "bmewburn.vscode-intelephense-client"
+      ],
+      "settings": {
+        "php.validate.executablePath": "/usr/local/bin/php",
+        "php.debug.executablePath": "/usr/local/bin/php",
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/usr/bin/zsh"
+          }
+        }
+      }
+    }
+  },
+  // "postCreateCommand": "bash .devcontainer/scripts/setup.sh",
+  "containerUser": "vscode"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "homebrew",
+  "version": "1.0.0",
+  "name": "Homebrew",
+  "description": "Installs Homebrew package manager for Linux",
+  "options": {
+    "brewPrefix": {
+      "type": "string",
+      "default": "/home/linuxbrew/.linuxbrew",
+      "description": "Homebrew installation prefix"
+    },
+    "shallowClone": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use shallow clone for faster installation"
+    }
+  },
+  "installsAfter": []
+}
+
