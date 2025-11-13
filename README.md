@@ -13,7 +13,7 @@ A standalone devcontainer repository providing shared services, tooling, and con
 ## Quick Start
 
 1. Clone this repository
-2. Copy `.devcontainer/.env.example` to `.env` and configure repositories
+2. Copy `.devcontainer/.env.example` to `.devcontainer/.env` and configure repositories
 3. Open in VS Code/Cursor and click "Reopen in Container"
 4. Services will start automatically, and repositories will be cloned if configured
 
