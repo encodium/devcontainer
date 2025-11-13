@@ -124,7 +124,7 @@ echo "   Failed: $FAIL_COUNT"
 echo ""
 
 if [ $FAIL_COUNT -gt 0 ]; then
-    echo "⚠️  Some repositories failed to link. Check the errors above."
+    echo "⚠️ Some repositories failed to link. Check the errors above."
     exit 1
 elif [ $SUCCESS_COUNT -gt 0 ]; then
     echo "✅ All repositories linked successfully!"

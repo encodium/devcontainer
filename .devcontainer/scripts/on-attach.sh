@@ -76,7 +76,7 @@ if ! redis-cli -h "${REDIS_HOST}" -p 6379 ping &>/dev/null; then
     WARNINGS+=("Redis service not reachable")
 fi
 
-if ! MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P 3306 -u "${MYSQL_USER}" -e "SELECT 1;" "${MYSQL_DATABASE}" &>/dev/null; then
+if ! MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -e "SELECT 1;" &>/dev/null; then
     WARNINGS+=("MySQL service not reachable")
 fi
 
