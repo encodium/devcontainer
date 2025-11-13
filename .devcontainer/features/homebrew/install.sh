@@ -26,8 +26,6 @@ apt-get install -y --no-install-recommends \
   file \
   git
 
-# Clean up apt cache
-rm -rf /var/lib/apt/lists/*
 
 # The official installer installs to /home/linuxbrew/.linuxbrew by default
 # If we need a different prefix, we can set it, but the default is recommended
@@ -61,10 +59,33 @@ else
   ACTUAL_BREW_PREFIX="${BREW_PREFIX}"
 fi
 
+# Get target user UID and GID
+TARGET_UID=$(id -u "${TARGET_USER}")
+TARGET_GID=$(id -g "${TARGET_USER}")
+
 # Ensure ownership is correct after installation
-echo "Ensuring ownership is set to ${TARGET_USER}..."
+# The Homebrew installer creates a linuxbrew user (UID 999), so we need to fix ownership
+echo "Ensuring ownership is set to ${TARGET_USER} (UID: ${TARGET_UID}, GID: ${TARGET_GID})..."
+
+# Fix ownership of the parent directory if it exists
+if [ -d "/home/linuxbrew" ]; then
+  echo "Fixing ownership of /home/linuxbrew..."
+  chown -R "${TARGET_UID}:${TARGET_GID}" "/home/linuxbrew"
+fi
+
+# Fix ownership of the brew prefix directory
 if [ -d "${ACTUAL_BREW_PREFIX}" ]; then
-  chown -R "${TARGET_USER}:${TARGET_USER}" "${ACTUAL_BREW_PREFIX}"
+  echo "Fixing ownership of ${ACTUAL_BREW_PREFIX}..."
+  chown -R "${TARGET_UID}:${TARGET_GID}" "${ACTUAL_BREW_PREFIX}"
+fi
+
+# Verify ownership was set correctly
+if [ -d "${ACTUAL_BREW_PREFIX}" ]; then
+  ACTUAL_OWNER=$(stat -c '%U:%G' "${ACTUAL_BREW_PREFIX}")
+  echo "Ownership after fix: ${ACTUAL_OWNER}"
+  if [ "${ACTUAL_OWNER}" != "${TARGET_USER}:${TARGET_USER}" ]; then
+    echo "Warning: Ownership may not be correct. Expected ${TARGET_USER}:${TARGET_USER}, got ${ACTUAL_OWNER}"
+  fi
 fi
 
 # Configure Homebrew shell environment for the target user

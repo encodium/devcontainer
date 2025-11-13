@@ -1,37 +1,34 @@
-version: '3.8'
+name: devcontainer
 
 services:
-  devcontainer:
+  shell:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - ../workspace:/workspace:cached
-      - /var/run/docker.sock:/var/run/docker.sock
-      - local-data:/home/vscode/.devcontainer-storage
     command: sleep infinity
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mysql
+      - localstack
     networks:
       - rp
-    environment:
-      - SSH_AUTH_SOCK=/tmp/ssh-agent.sock
-      - COMMON_REPO_PATH=${COMMON_REPO_PATH:-/workspace/common}
-      - MYSQL_HOST=${MYSQL_HOST:-mysql}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_USER=${MYSQL_USER:-dev}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-dev}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-dev}
-      - VALKEY_HOST=${VALKEY_HOST:-valkey}
-      - VALKEY_PORT=${VALKEY_PORT:-6379}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - home-data:/home/vscode
 
-  valkey:
+  redis:
     image: valkey/valkey:7.2-alpine
-    container_name: valkey
     ports:
-      - "${VALKEY_PORT:-6379}:6379"
+      - "${REDIS_EXTERNAL_PORT:-6379}:${REDIS_PORT:-6379}"
+    env_file:
+      - .env
     networks:
       - rp
     healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping", "-h", "${REDIS_HOST:-redis}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -39,20 +36,17 @@ services:
 
   mysql:
     image: mysql:8.0
-    container_name: mysql
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-dev}
-      MYSQL_USER: ${MYSQL_USER:-dev}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dev}
+      - "${MYSQL_EXTERNAL_PORT:-3306}:${MYSQL_PORT:-3306}"
+    env_file:
+      - .env
     networks:
       - rp
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./database/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "${MYSQL_HOST:-mysql}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,31 +55,30 @@ services:
   localstack:
     image: localstack/localstack:latest
     ports:
-      - "${LOCALSTACK_PORT:-4566}:4566"
-      - "4510-4559:4510-4559"
+      - "${LOCALSTACK_EXTERNAL_PORT:-4566}:${LOCALSTACK_PORT:-4566}"
+      - "${LOCALSTACK_EXTERNAL_PORT_RANGE_START:-4510}-${LOCALSTACK_EXTERNAL_PORT_RANGE_END:-4559}:${LOCALSTACK_PORT_RANGE_START:-4510}-${LOCALSTACK_PORT_RANGE_END:-4559}"
     environment:
       - SERVICES=s3,sqs,sns
       - DEBUG=1
-      - DATA_DIR=/tmp/localstack/data
+      - DATA_DIR=/var/lib/localstack/data
       - DOCKER_HOST=unix:///var/run/docker.sock
     networks:
       - rp
     volumes:
-      - localstack-data:/tmp/localstack
+      - localstack-data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      test: ["CMD", "curl", "-f", "http://${LOCALSTACK_HOST:-localstack}:${LOCALSTACK_PORT:-4566}/_localstack/health"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
 volumes:
+  home-data:
   mysql-data:
   localstack-data:
-  local-data:
 
 networks:
   rp:
-    name: rp
 

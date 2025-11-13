@@ -1,37 +1,30 @@
 {
   "name": "Local Development",
   "dockerComposeFile": "compose.yaml",
-  "service": "devcontainer",
+  "service": "shell",
   "workspaceFolder": "/workspace",
-  "shutdownAction": "none",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": "."
-  },
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": "true",
       "installOhMyZsh": true,
       "upgradePackages": false
     },
-    "./features/homebrew": {
-      "shallowClone": true
-    },
-    "./features/tools": {
-      "packages": ["kubectl", "helm", "vault", "mysql-client", "redis", "fnm", "gh"]
-    },
-    "./features/composer-link-plugin": {}
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    }
   },
   "mounts": [
     "source=${localWorkspaceFolder}/workspace,target=/workspace,type=bind,consistency=cached",
-    "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind",
-    "source=local-data,target=/home/vscode/.devcontainer-storage,type=volume"
+    "source=${localWorkspaceFolder}/.devcontainer/scripts,target=/home/vscode/.devcontainer/scripts,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/logs,target=/home/vscode/.devcontainer/logs,type=bind,consistency=cached",
+    "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind"
   ],
   "remoteEnv": {
     "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
   },
   "containerEnv": {
-    "USERNAME": "vscode"
+    "USERNAME": "vscode",
+    "XDEBUG_CONFIG": "client_host=host.docker.internal log=/home/vscode/.devcontainer/logs/xdebug.log"
   },
   "customizations": {
     "vscode": {
@@ -48,10 +41,21 @@
           "zsh": {
             "path": "/usr/bin/zsh"
           }
+        },
+        "search.useIgnoreFiles": false,
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/vendor": true,
+          "**/dist": true,
+          "**/coverage": true,
+          "**/coverage-src": true,
+          "**/logs": true
         }
       }
     }
   },
-  // "postCreateCommand": "bash .devcontainer/scripts/setup.sh",
+  "postCreateCommand": "bash ~/.devcontainer/scripts/on-create.sh",
+  "postAttachCommand": "bash ~/.devcontainer/scripts/on-attach.sh",
+  "remoteUser": "vscode",
   "containerUser": "vscode"
 }

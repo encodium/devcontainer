@@ -16,9 +16,6 @@ TARGET_HOME="/home/${TARGET_USER}"
 # Set HOME to target user's home so composer installs to the correct location
 export HOME="${TARGET_HOME}"
 
-# Ensure composer global directory exists
-mkdir -p "${HOME}/.composer"
-
 # Install composer-link plugin globally
 composer global config --no-plugins allow-plugins.sandersander/composer-link true
 composer global require sandersander/composer-link

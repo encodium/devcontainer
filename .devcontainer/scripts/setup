@@ -1,0 +1,275 @@
+#!/bin/bash
+# Setup script with modular functions for devcontainer configuration
+# Usage: setup <function-name> [args...]
+# Available functions: packagist-auth, npmrc, composer-link, github-cli
+
+set -euo pipefail
+
+# Load environment variables from root .env if it exists
+if [ -f "/workspace/.env" ]; then
+    set -a
+    source /workspace/.env
+    set +a
+fi
+
+# Setup Private Packagist authentication for Composer
+setup-packagist-auth() {
+    echo "🔐 Private Packagist Authentication Setup"
+    echo ""
+    echo "To configure Private Packagist authentication:"
+    echo ""
+    echo "1. Visit: https://packagist.com/orgs/encodium"
+    echo "2. Go to the 'Setup authentication' section"
+    echo "3. Copy and paste the command provided by Packagist"
+    echo ""
+    echo "The command will look like:"
+    echo "   composer config --global --auth http-basic.repo.packagist.com <username> <password>"
+    echo ""
+    echo "Credentials will persist in the home volume after configuration."
+    return 0
+}
+
+# Setup npm authentication
+setup-npmrc() {
+    echo "🔐 Configuring npm authentication..."
+    
+    # Get GitHub PAT token
+    if ! gh auth status &>/dev/null; then
+        echo "❌ GitHub CLI authentication required"
+        echo ""
+        echo "   Run: gh auth login"
+        echo "   Then run: setup npmrc"
+        return 1
+    fi
+    
+    local token
+    if ! token=$(gh auth token 2>/dev/null); then
+        echo "❌ Failed to get GitHub token"
+        echo "   Ensure GitHub CLI is authenticated: gh auth login"
+        return 1
+    fi
+    
+    local npmrc_file="$HOME/.npmrc"
+    if {
+        echo "@encodium:registry=https://npm.pkg.github.com/"
+        echo "//npm.pkg.github.com/:_authToken=$token"
+    } > "$npmrc_file"; then
+        chmod 600 "$npmrc_file"
+        echo "✅ npm authentication configured at $npmrc_file"
+        echo "   Using GitHub Packages registry for @encodium scope"
+        echo "   Credentials will persist in the home volume"
+        return 0
+    else
+        echo "❌ Failed to configure npm authentication"
+        return 1
+    fi
+}
+
+# Setup composer-link for common repo
+setup-composer-link() {
+    local common_path="${COMMON_REPO_PATH:-/workspace/common}"
+    
+    echo "🔗 Setting up composer-link for common repo..."
+    
+    # Check if composer-link plugin is available
+    if ! composer help link &>/dev/null; then
+        echo "❌ ERROR: composer-link plugin not found"
+        echo ""
+        echo "   Install it with:"
+        echo "      composer global require sandersander/composer-link"
+        return 1
+    fi
+    
+    # Check if common repo exists
+    if [ ! -d "$common_path" ]; then
+        echo "❌ ERROR: Common repo not found at $common_path"
+        echo ""
+        echo "   Clone it first:"
+        echo "      clone-repos common"
+        return 1
+    fi
+    
+    # Check if common repo has composer.json
+    if [ ! -f "$common_path/composer.json" ]; then
+        echo "❌ ERROR: composer.json not found in common repo"
+        return 1
+    fi
+    
+    # Get all repos in workspace (excluding common)
+    local repos=()
+    for dir in /workspace/*; do
+        if [ -d "$dir" ] && [ -d "$dir/.git" ] && [ "$(basename "$dir")" != "common" ]; then
+            repos+=("$dir")
+        fi
+    done
+    
+    if [ ${#repos[@]} -eq 0 ]; then
+        echo "⚠️  No other repositories found in /workspace to link"
+        echo ""
+        echo "   Clone some repositories first:"
+        echo "      clone-repos batch"
+        return 1
+    fi
+    
+    echo "   Found ${#repos[@]} repository/repositories to link"
+    
+    local success_count=0
+    local fail_count=0
+    
+    for repo in "${repos[@]}"; do
+        local repo_name=$(basename "$repo")
+        
+        # Check if repo has composer.json
+        if [ ! -f "$repo/composer.json" ]; then
+            echo "⚠️  Skipping $repo_name: no composer.json found"
+            continue
+        fi
+        
+        # Check if already linked
+        if [ -L "$repo/vendor/common" ] && [ "$(readlink -f "$repo/vendor/common")" = "$(readlink -f "$common_path")" ]; then
+            echo "   ✅ $repo_name already linked"
+            continue
+        fi
+        
+        # Link common to repo
+        cd "$repo"
+        if composer link "$common_path" &>/dev/null; then
+            echo "   ✅ Linked common to $repo_name"
+            success_count=$((success_count + 1))
+        else
+            echo "   ❌ Failed to link common to $repo_name"
+            fail_count=$((fail_count + 1))
+        fi
+    done
+    
+    if [ $fail_count -gt 0 ]; then
+        echo ""
+        echo "⚠️  Some repositories failed to link"
+        return 1
+    elif [ $success_count -gt 0 ]; then
+        echo ""
+        echo "✅ All repositories linked successfully"
+        return 0
+    else
+        echo ""
+        echo "ℹ️  All repositories were already linked"
+        return 0
+    fi
+}
+
+# Setup GitHub CLI authentication
+setup-github-cli() {
+    echo "🔐 Setting up GitHub CLI authentication..."
+    
+    if gh auth status &>/dev/null; then
+        echo "✅ GitHub CLI already authenticated"
+        return 0
+    fi
+    
+    echo "   Run: gh auth login"
+    echo "   Credentials will persist in the home volume"
+    return 1
+}
+
+# Run all setup functions
+setup-all() {
+    echo "🚀 Running all setup functions..."
+    echo ""
+    
+    local failed=0
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "1. GitHub CLI"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if ! setup-github-cli; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "2. Private Packagist"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    setup-packagist-auth
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "3. npm"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if ! setup-npmrc; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "4. Composer Link"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if ! setup-composer-link; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ $failed -eq 0 ]; then
+        echo "✅ All setup functions completed"
+    else
+        echo "⚠️  Some setup functions failed or were skipped"
+    fi
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    return $failed
+}
+
+# Main function dispatcher
+main() {
+    local command="${1:-}"
+    
+    # If no command provided, run all setup functions
+    if [ -z "$command" ]; then
+        setup-all
+        return $?
+    fi
+    
+    case "$command" in
+        packagist-auth)
+            setup-packagist-auth
+            ;;
+        npmrc)
+            setup-npmrc
+            ;;
+        composer-link)
+            setup-composer-link
+            ;;
+        github-cli)
+            setup-github-cli
+            ;;
+        all)
+            setup-all
+            ;;
+        *)
+            echo "Usage: setup [command] [args...]"
+            echo ""
+            echo "Run all setup functions:"
+            echo "  setup              - Run all setup functions interactively"
+            echo "  setup all          - Run all setup functions"
+            echo ""
+            echo "Run specific setup functions:"
+            echo "  setup packagist-auth                     - Show Private Packagist authentication instructions"
+            echo "  setup npmrc                              - Configure npm authentication using GitHub token"
+            echo "  setup composer-link                     - Link common repo to all workspace repositories"
+            echo "  setup github-cli                        - Check GitHub CLI authentication status"
+            echo ""
+            echo "Examples:"
+            echo "  setup                                    # Run all setup functions"
+            echo "  setup packagist-auth                     # Show Packagist auth instructions"
+            echo "  setup npmrc                              # Configure npm with GitHub token"
+            echo "  setup composer-link"
+            exit 1
+            ;;
+    esac
+}
+
+# If script is executed directly (not sourced), run main
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@"
+fi
+

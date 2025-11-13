@@ -1,6 +1,9 @@
 .env
 .env.local
-workspace/
+workspace/*
+!workspace/.gitkeep
+logs/*
+!logs/.gitkeep
 *.log
 
 
