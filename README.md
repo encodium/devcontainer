@@ -1,6 +1,6 @@
 # Devcontainer "Sandbox"
 
-A standalone devcontainer repository providing shared services, tooling, and configuration for a multi-repo development environment.
+A standalone devcontainer repository providing shared services, tooling, and configuration for a multi-repo development environment. The goal is to ensure a consistent, local development environment that improves developer onboarding, experience, and velocity.
 
 ## What is a Devcontainer?
 
@@ -14,13 +14,23 @@ A devcontainer is a Docker-based development environment that runs inside VS Cod
 - **Persistent Storage**: Shell history and authentication configs persist across rebuilds
 - **Multi-Platform**: Works on Windows (WSL2), macOS, and Linux
 
+## Windows Users: WSL2 Required
+
+> [!IMPORTANT]  
+> This devcontainer requires WSL2 (Windows Subsystem for Linux 2) on Windows.
+
+If you haven't set up WSL2 yet, follow the [official WSL2 installation guide](https://learn.microsoft.com/en-us/windows/wsl/install) before proceeding.
+
+> [!CAUTION]
+> We do not have a license for Docker Desktop. Windows users should install Docker Engine inside WSL2 instead. See Docker installation instructions below.
+
 ## Prerequisites
 
 - **VS Code** or **Cursor** installed
-- **Docker Desktop** installed and running:
-  - Windows: Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)
-  - macOS: Install [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
-  - Linux: Install [Docker Engine](https://docs.docker.com/engine/install/)
+- **Docker Engine** installed and running:
+  - **Windows (WSL2)**: Install Docker Engine directly in your WSL2 distribution following the [Docker Engine installation guide for Ubuntu](https://docs.docker.com/engine/install/ubuntu/) (or your WSL2 distribution's equivalent)
+  - **macOS**: Install Docker Engine using [Colima](https://github.com/abiosoft/colima) (recommended) or [OrbStack](https://orbstack.dev/). Alternatively, use Homebrew: `brew install colima` then `colima start`
+  - **Linux**: Install [Docker Engine](https://docs.docker.com/engine/install/) for your distribution
 - **Dev Containers extension** (usually installed automatically when opening a devcontainer)
 - **GitHub CLI** installed and authenticated on your host machine:
   - **macOS**: `brew install gh` ([Homebrew](https://brew.sh/)) or follow [GitHub CLI installation instructions](https://github.com/cli/cli/blob/trunk/docs/install_macos.md)
@@ -49,8 +59,9 @@ Instructions TBD using `devcontainer` CLI tools
    ```bash
    cp .devcontainer/.env.example .devcontainer/.env
    ```
-  - If you have multiple clones of the `devcontainer` repo, you must ensure the `COMPOSE_PROJECT_NAME` variable in your `.env` file is unique from the others
-  - You must also ensure all `_EXTERNAL_` port numbers are unique from the others or docker will fail to start all services
+    > [!NOTE]  
+    > - If you have multiple clones of the `devcontainer` repo, you must ensure the `COMPOSE_PROJECT_NAME` variable in your `.env` file is unique from the others
+    > - You must also ensure all `_EXTERNAL_` port numbers are unique from the others or docker will fail to start all services
 
 3. **Open in VS Code/Cursor**: Open the repository folder in your editor
 
@@ -245,11 +256,25 @@ Xdebug is pre-configured for VS Code/Cursor. The debugger listens on port 9003.
 
 ### Container Won't Start
 
-**Windows/macOS**: Ensure Docker Desktop is running and not paused.
+**Windows (WSL2)**: Ensure Docker daemon is running:
+```bash
+sudo systemctl status docker
+# If not running, start it:
+sudo service docker start
+```
+
+**macOS**: Ensure Docker daemon is running:
+```bash
+# Check if Docker is running
+docker ps
+# If not, start Docker from Applications or via command line
+```
 
 **Linux**: Ensure Docker daemon is running:
 ```bash
 sudo systemctl status docker
+# If not running, start it:
+sudo systemctl start docker
 ```
 
 ### Services Not Accessible
@@ -259,7 +284,8 @@ Test service connectivity:
 test-services
 ```
 
-If services show ❌, they may still be starting. Wait a minute and try again.
+> [!TIP]
+> If services show ❌, they may still be starting. Wait a minute and try again.
 
 ### Repository Cloning Fails
 
@@ -284,9 +310,9 @@ Then rebuild the container.
 ### Container is Slow
 
 First-time build downloads images and installs tools. Subsequent starts are faster. If the container feels slow:
-- Check Docker Desktop resources (Settings → Resources)
 - Ensure you have enough disk space
-- Try restarting Docker Desktop
+- Check Docker resource limits (if configured)
+- Try restarting the Docker daemon
 
 ## How It Works
 
@@ -355,7 +381,7 @@ The container includes:
 If you encounter issues:
 
 1. Check the Troubleshooting section above
-2. Verify Docker Desktop is running and up to date
+2. Verify Docker Engine is installed and running
 3. Try rebuilding the container (F1 → "Dev Containers: Rebuild Container")
 4. Check the container logs in VS Code/Cursor output panel
 

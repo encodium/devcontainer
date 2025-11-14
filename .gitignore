@@ -5,5 +5,3 @@ workspace/*
 logs/*
 !logs/.gitkeep
 *.log
-
-
