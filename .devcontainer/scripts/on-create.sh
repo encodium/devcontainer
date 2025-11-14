@@ -55,6 +55,9 @@ if [ -f "${BREW_PREFIX}/opt/fzf/shell/completion.zsh" ]; then
     fi
 fi
 
+# Fix ownership for Homebrew directories, installer gives uid/gid of 999 at this time
+sudo chown -R vscode:vscode /home/linuxbrew /home/vscode/.cache
+
 # Check for issues and collect warnings
 WARNINGS=()
 MISSING_AUTH=()

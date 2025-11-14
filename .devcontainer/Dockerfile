@@ -88,7 +88,7 @@ WORKDIR /home/vscode
 
 # Install Homebrew using the official installer with cache mount
 # The installer will use sudo internally, which is why vscode has sudo access
-RUN --mount=type=cache,target=/home/vscode/.cache/Homebrew \
+RUN --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
     NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || exit 1
 
 # Set Homebrew prefix and configure environment
@@ -98,19 +98,12 @@ ENV HOMEBREW_NO_AUTO_UPDATE=1
 
 # Install Homebrew packages with cache mount
 # Cache mounts create directories with root ownership, so we fix ownership before brew operations
-RUN --mount=type=cache,target=${BREW_PREFIX}/var/cache \
-    --mount=type=cache,target=/home/vscode/.cache/Homebrew \
-    sudo chown -R vscode:vscode ${BREW_PREFIX}/var/cache /home/vscode/.cache/Homebrew && \
+RUN --mount=type=cache,target=${BREW_PREFIX}/var/cache,uid=1000,gid=1000 \
+    --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
+    sudo chown -R vscode:vscode ${BREW_PREFIX} /home/vscode/.cache && \
     eval "$(${BREW_PREFIX}/bin/brew shellenv)" && \
-    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind
+    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat
 
 # Install composer-link plugin globally
 RUN composer global config --no-plugins allow-plugins.sandersander/composer-link true && \
     composer global require sandersander/composer-link
-
-# Fix ownership of Homebrew directories (installer may have changed ownership)
-USER root
-RUN chown -R vscode:vscode /home/linuxbrew /home/vscode/.cache/Homebrew 2>/dev/null || true
-
-USER vscode
-WORKDIR /workspace

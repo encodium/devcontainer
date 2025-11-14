@@ -1,192 +1,193 @@
-# Devcontainer Sandbox
+# Devcontainer "Sandbox"
 
 A standalone devcontainer repository providing shared services, tooling, and configuration for a multi-repo development environment.
+
+## What is a Devcontainer?
+
+A devcontainer is a Docker-based development environment that runs inside VS Code or Cursor. It provides a consistent, isolated environment with all the tools and services you need, regardless of your operating system (Windows, macOS, or Linux).
 
 ## Features
 
 - **Shared Services**: Redis (Valkey), MySQL 8, LocalStack (S3, SQS, SNS)
-- **Development Tools**: PHP 8.3 CLI with full extension suite (bcmath, ftp, gd, intl, mbstring, mysqli, opcache, pcntl, pdo, pdo_mysql, pdo_pgsql, soap, sockets, zip, apcu, redis), Composer, Xdebug, Git, GitHub CLI, Docker, kubectl, Vault CLI, fnm (Node.js), Redis CLI, MySQL CLI
-- **Multi-Repo Management**: Automatic repo cloning and composer-link setup
-- **Persistent Storage**: Shell history and auth configs persist across rebuilds
-- **Multi-Platform**: Supports Linux, macOS, and Windows (WSL2)
+- **Development Tools**: PHP 8.3 CLI with full extension suite, Composer, Xdebug, Git, GitHub CLI, Docker, kubectl, Vault CLI, Node.js (via fnm), Redis CLI, MySQL CLI
+- **Multi-Repo Management**: Clone and link multiple repositories easily
+- **Persistent Storage**: Shell history and authentication configs persist across rebuilds
+- **Multi-Platform**: Works on Windows (WSL2), macOS, and Linux
+
+## Prerequisites
+
+- **VS Code** or **Cursor** installed
+- **Docker Desktop** installed and running:
+  - Windows: Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)
+  - macOS: Install [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
+  - Linux: Install [Docker Engine](https://docs.docker.com/engine/install/)
+- **Dev Containers extension** (usually installed automatically when opening a devcontainer)
 
 ## Quick Start
 
-1. Clone this repository
-2. Copy `.devcontainer/.env.example` to `.devcontainer/.env` and configure repositories
-3. Open in VS Code/Cursor and click "Reopen in Container"
-4. Services will start automatically, and repositories will be cloned if configured
+1. **Clone this repository** to your local machine
+2. **Open in VS Code/Cursor**: Open the repository folder in your editor
+3. **Reopen in Container**: When prompted, click "Reopen in Container" (or press `F1` and select "Dev Containers: Reopen in Container")
+4. **Wait for setup**: The container will build and start services automatically (first time may take a few minutes)
+5. **Clone your repositories**: Once inside the container, run:
+   ```bash
+   clone-repos batch,common
+   ```
+6. **Link common repository** (if needed):
+   ```bash
+   setup composer-link
+   ```
+7. **Configure authentication** (see Authentication section below)
+
+## Available Commands
+
+Once inside the container, you have access to these commands:
+
+### Repository Management
+
+- **`clone-repos [repo1,repo2,...]`** - Clone repositories from the `encodium` organization
+  ```bash
+  clone-repos batch,common,webstore
+  # Or use default from .env: clone-repos
+  ```
+
+- **`link-common`** - Link the common repository to all workspace repositories using composer-link
+  ```bash
+  link-common
+  ```
+
+### Setup & Configuration
+
+- **`setup`** - Run all setup functions (authentication, etc.)
+- **`setup packagist-auth`** - Get instructions for configuring Private Packagist authentication
+- **`setup npmrc`** - Configure npm authentication using GitHub CLI token
+- **`setup composer-link`** - Link common repo to all workspace repositories
+- **`setup github-cli`** - Check GitHub CLI authentication status
+
+### Service Access
+
+- **`redis`** - Connect to Redis CLI
+- **`mysql`** - Connect to MySQL CLI
+- **`awslocal`** - AWS CLI with LocalStack endpoint pre-configured
+- **`test-services`** - Test connectivity to all services
+- **`k`** - Shortcut for `kubectl`
 
 ## Configuration
 
-### Environment Configuration
+### Environment Variables
 
-Copy `.devcontainer/.env.example` to `.env` (workspace root) and configure as needed:
+You can customize the devcontainer by creating a `.env` file in the workspace root (`.devcontainer/.env.example` shows available options):
 
 ```bash
 # Repository Configuration
 REPOS_TO_CLONE=batch,common
-COMPOSER_LINK_COMMON=true
 COMMON_REPO_PATH=/workspace/common
 
-# Redis Configuration
+# Service Configuration (optional - defaults work for most cases)
 REDIS_HOST=redis
-REDIS_PORT=6379
-# REDIS_EXTERNAL_PORT is for host port exposure (default: 6379)
-# Internal Docker network uses ${REDIS_HOST}:${REDIS_PORT} (default: redis:6379)
-
-# MySQL Configuration
 MYSQL_HOST=mysql
-MYSQL_PORT=3306
 MYSQL_USER=dev
 MYSQL_PASSWORD=dev
 MYSQL_DATABASE=dev
-# MYSQL_EXTERNAL_PORT is for host port exposure (default: 3306)
-# Internal Docker network uses ${MYSQL_HOST}:${MYSQL_PORT} (default: mysql:3306)
 
-# LocalStack Configuration
-LOCALSTACK_PORT=4566
-# LOCALSTACK_EXTERNAL_PORT is for host port exposure (default: 4566)
-# LOCALSTACK_EXTERNAL_PORT_RANGE_START and LOCALSTACK_EXTERNAL_PORT_RANGE_END for port range (default: 4510-4559)
-# Internal Docker network uses http://localstack:${LOCALSTACK_PORT} (default: http://localstack:4566)
+# Port Configuration (only needed if host ports conflict)
+REDIS_EXTERNAL_PORT=6379
+MYSQL_EXTERNAL_PORT=3306
+LOCALSTACK_EXTERNAL_PORT=4566
 ```
 
-All scripts load environment variables from `.env` (workspace root) with sensible defaults. You can override any value by setting it in `.env`.
-
-### Setup Command
-
-The `setup` command provides modular functions for configuring the devcontainer:
-
-```bash
-setup <command> [args...]
-```
-
-Available commands:
-- `setup packagist-auth <username> <token>` - Configure Private Packagist authentication
-- `setup npmrc [token]` - Configure npm authentication (or use NPM_TOKEN env var)
-- `setup composer-link` - Link common repo to all workspace repositories
-- `setup github-cli` - Check GitHub CLI authentication status
-
-Examples:
-```bash
-setup packagist-auth myuser mytoken
-setup npmrc my-npm-token
-setup composer-link
-```
+**Note**: Most users don't need to modify these. The defaults work out of the box. Only change ports if you have conflicts on your host machine.
 
 ### Adding New Repositories
 
-Add repositories to `REPOS_TO_CLONE` in `.env`:
+Clone additional repositories anytime:
 
 ```bash
-REPOS_TO_CLONE=batch,common,new-repo
+clone-repos new-repo,another-repo
 ```
 
-The setup script will clone repositories from the `encodium` organization if they don't already exist in `/workspace`.
-
-### Mounting External Directories
-
-You can mount external directories into the workspace by configuring `workspaceMounts` in `devcontainer.json`:
-
-```json
-"workspaceMounts": [
-  "source=/path/to/external/repo,target=/workspace/my-repo,type=bind"
-]
-```
+Or add them to `REPOS_TO_CLONE` in `.env` and run `clone-repos` without arguments.
 
 ## Services
 
+The devcontainer includes three services that start automatically:
+
 ### Redis (Valkey)
 
-- **Internal Docker Network**: `${REDIS_HOST:-redis}:6379` (use for tooling inside container)
-- **External Host**: `localhost:${REDIS_EXTERNAL_PORT:-6379}` (from host, configurable via `REDIS_EXTERNAL_PORT` in `.env`)
-- **Host**: `${REDIS_HOST:-redis}` (configurable via `REDIS_HOST` in `.env`, defaults to `redis`)
-- **CLI Tool**: Redis CLI is installed via devcontainer feature
-- **Alias**: `redis` (connects to Redis service using standard port 6379)
+- **Inside container**: Use `redis` alias or connect to `redis:6379`
+- **From host machine**: `localhost:6379` (or custom port if configured)
+- **CLI**: Run `redis` command in the container
 
 ### MySQL
 
-- **Internal Docker Network**: `${MYSQL_HOST:-mysql}:3306` (use for tooling inside container)
-- **External Host**: `localhost:${MYSQL_EXTERNAL_PORT:-3306}` (from host, configurable via `MYSQL_EXTERNAL_PORT` in `.env`)
-- **Host**: `${MYSQL_HOST:-mysql}` (configurable via `MYSQL_HOST` in `.env`, defaults to `mysql`)
-- **User**: `dev` (configurable via `MYSQL_USER` in `.env`)
-- **Password**: `dev` (configurable via `MYSQL_PASSWORD` in `.env`)
-- **Database**: `dev` (configurable via `MYSQL_DATABASE` in `.env`)
-- **CLI Tool**: MySQL CLI is installed via devcontainer feature
-- **Alias**: `mysql` (connects to MySQL service using standard port 3306)
+- **Inside container**: Use `mysql` alias or connect to `mysql:3306`
+- **From host machine**: `localhost:3306` (or custom port if configured)
+- **Credentials**: `dev` / `dev` (username / password)
+- **Database**: `dev`
+- **CLI**: Run `mysql` command in the container
 
 ### LocalStack (AWS Services)
 
-- **Internal Docker Network**: `http://localstack:4566` (use for tooling inside container)
-- **External Host**: `http://localhost:${LOCALSTACK_EXTERNAL_PORT:-4566}` (from host, configurable via `LOCALSTACK_EXTERNAL_PORT` in `.env`)
+- **Inside container**: Use `awslocal` alias or connect to `http://localstack:4566`
+- **From host machine**: `http://localhost:4566` (or custom port if configured)
 - **Services**: S3, SQS, SNS
-- **Credentials**: 
-  - `AWS_ACCESS_KEY_ID=test`
-  - `AWS_SECRET_ACCESS_KEY=test`
-  - `AWS_DEFAULT_REGION=us-east-1`
-- **Aliases**: `awslocal` (AWS CLI with LocalStack endpoint)
+- **Credentials**: `test` / `test` (access key / secret key)
+- **CLI**: Run `awslocal s3 ls` or similar commands
+
+**Testing Services**: Run `test-services` to verify all services are accessible.
 
 ## Authentication
 
-Authentication credentials persist in the home volume across container rebuilds. Use the `setup` command to configure authentication:
+Authentication credentials persist across container rebuilds. Configure them once and they'll be saved.
 
 ### GitHub CLI
 
+Required for cloning repositories:
+
 ```bash
-setup github-cli
-# Or run directly: gh auth login
+gh auth login
 ```
+
+Follow the prompts to authenticate. Your credentials are saved in the persistent home volume.
 
 ### Composer (Private Packagist)
 
-```bash
-setup packagist-auth <username> <token>
-# Get credentials from: https://packagist.com/profile/auth
-```
-
-### npm
+Get setup instructions:
 
 ```bash
-setup npmrc <token>
-# Or set NPM_TOKEN environment variable
+setup packagist-auth
 ```
+
+This will show you how to configure authentication. Visit https://packagist.com/orgs/encodium to get your credentials.
+
+### npm (GitHub Packages)
+
+Automatically configured using your GitHub CLI token:
+
+```bash
+setup npmrc
+```
+
+This uses your existing GitHub CLI authentication, so make sure `gh auth login` is done first.
 
 ### SSH
 
-SSH agent forwarding is automatically configured via the `SSH_AUTH_SOCK` environment variable. The host's SSH agent socket is mounted into the container, allowing you to use your host's SSH keys without copying them into the container.
+SSH agent forwarding is automatically configured. Your host's SSH keys are available in the container without copying them. Just use `git` commands normally.
 
 ## Composer Link
 
-The `common` repository can be linked to all other repositories using [composer-link](https://github.com/SanderSander/composer-link). The path to the common repository is configurable via `COMMON_REPO_PATH` in `.env` (defaults to `/workspace/common`).
+The `common` repository can be linked to all other repositories for local development. This allows you to test changes to common across multiple repos.
 
-To link common to all workspace repositories:
-
+**Link common to all repositories:**
 ```bash
 setup composer-link
-# Or use the standalone command: link-common
 ```
 
-To manually link a specific repo:
-
+**Unlink (if needed):**
 ```bash
 cd /workspace/my-repo
-composer link ${COMMON_REPO_PATH:-/workspace/common}
-```
-
-To unlink:
-
-```bash
 composer unlink /workspace/common
 ```
-
-## Shell Aliases
-
-- `redis` - Connect to Redis (uses `REDIS_HOST` from `.env`, always uses port 6379)
-- `mysql` - Connect to MySQL (uses `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` from `.env`, always uses port 3306)
-- `awslocal` - AWS CLI with LocalStack endpoint (always uses port 4566)
-- `test-services` - Test connectivity to all services
-
-All aliases use standard internal ports (6379, 3306, 4566) and respect host/hostname environment variables set in `.env`. The `*_HOST` variables control the Docker network hostname, while `*_EXTERNAL_PORT` variables control host port forwarding.
 
 ## Xdebug Configuration
 
@@ -207,171 +208,120 @@ Xdebug is pre-configured for VS Code/Cursor. The debugger listens on port 9003.
 
 ## Troubleshooting
 
-### Services Not Starting
+### Container Won't Start
 
-Check service status:
+**Windows/macOS**: Ensure Docker Desktop is running and not paused.
 
+**Linux**: Ensure Docker daemon is running:
 ```bash
-docker compose -f .devcontainer/compose.yaml ps
+sudo systemctl status docker
 ```
 
-Start services manually:
+### Services Not Accessible
 
+Test service connectivity:
 ```bash
-docker compose -f .devcontainer/compose.yaml up -d
+test-services
 ```
+
+If services show ❌, they may still be starting. Wait a minute and try again.
 
 ### Repository Cloning Fails
 
 Ensure GitHub CLI is authenticated:
-
 ```bash
 gh auth status
+# If not authenticated:
 gh auth login
 ```
 
-### Composer Link Fails
-
-Verify the common repository exists and has a `composer.json`:
-
-```bash
-ls -la /workspace/common/composer.json
-```
-
-### SSH Agent Not Working
-
-Check SSH agent forwarding:
-
-```bash
-echo $SSH_AUTH_SOCK
-ssh-add -l
-```
-
-### Docker Socket Not Found
-
-The devcontainer uses `docker-outside-of-docker` feature which mounts the host Docker socket. If you see socket errors:
-
-- Linux: Ensure `/var/run/docker.sock` exists
-- macOS: Docker Desktop should expose the socket automatically
-- Windows/WSL2: Ensure Docker Desktop is running
-
 ### Port Conflicts
 
-If host ports are already in use, modify `.env` to use different external ports:
-
+If you get port conflict errors, create `.devcontainer/.env` and set custom ports:
 ```bash
 REDIS_EXTERNAL_PORT=6380
 MYSQL_EXTERNAL_PORT=3307
 LOCALSTACK_EXTERNAL_PORT=4567
-LOCALSTACK_EXTERNAL_PORT_RANGE_START=4520
-LOCALSTACK_EXTERNAL_PORT_RANGE_END=4569
 ```
 
-Note: `*_EXTERNAL_PORT` environment variables only affect the host port exposure. Inside containers and the Docker network, services use `${*_HOST}:${*_PORT}` (defaults: `redis:6379`, `mysql:3306`, `localstack:4566`). The `*_HOST` variables control the Docker network hostname, and `*_PORT` variables control the internal port (though these rarely need to be changed).
+Then rebuild the container.
 
-## Networking
+### Container is Slow
 
-Services are accessible via the `rp` network. 
+First-time build downloads images and installs tools. Subsequent starts are faster. If the container feels slow:
+- Check Docker Desktop resources (Settings → Resources)
+- Ensure you have enough disk space
+- Try restarting Docker Desktop
 
-**Inside containers/Docker network:**
-- Use service names with standard ports: `${REDIS_HOST:-redis}:6379`, `${MYSQL_HOST:-mysql}:3306`, `localstack:4566`
-- Tooling (aliases, scripts) automatically use standard ports and `*_HOST` variables
+## How It Works
 
-**From host machine:**
-- Use `localhost` with external ports (e.g., `localhost:${REDIS_EXTERNAL_PORT:-6379}`, `localhost:${MYSQL_EXTERNAL_PORT:-3306}`)
-- Port environment variables control host port exposure only
+### Networking
 
-To connect an external container to the network:
+- **Inside the container**: Services are accessible by name (`redis`, `mysql`, `localstack`) on standard ports
+- **From your host machine**: Services are accessible via `localhost` on the same ports (or custom ports if configured)
 
-```bash
-docker network connect rp <container-name>
-```
+### Persistence
 
-## Git-in-Git Handling
+Your home directory (`/home/vscode`) is stored in a Docker volume that persists across container rebuilds. This means:
+- ✅ Shell history is saved
+- ✅ Authentication credentials persist
+- ✅ Custom configurations are preserved
 
-The `workspace/` directory is automatically excluded from the parent repository's git tracking using `.git/info/exclude`. This prevents git-in-git issues when cloning repositories into the workspace.
+If you need to start fresh, you can remove the volume (see Persistence section below).
 
 ## Persistence
 
-The entire `/home/vscode` directory is persisted in a Docker volume (`home-data`) that persists across container rebuilds. This includes:
+Your home directory (`/home/vscode`) is stored in a Docker volume that persists across container rebuilds. This includes:
 
-- Shell history (`.zsh_history`, `.mysql_history`, `.rediscli_history`)
-- GitHub CLI authentication (`~/.config/gh`)
-- Composer global configs and auth (`~/.composer`)
-- npm configs (`~/.npmrc`, `~/.npm`)
-- All other home directory files and configurations
+- Shell history (500,000 lines)
+- GitHub CLI authentication
+- Composer and npm configurations
+- All other home directory files
 
-Note: SSH keys are not stored in the volume. SSH agent forwarding is used instead (see Authentication section).
+**Note**: SSH keys are not stored. SSH agent forwarding uses your host's keys automatically.
 
-### Managing the Home Volume
+### Starting Fresh
 
-The `home-data` volume is automatically created and managed by Docker Compose. To manage it:
+If you need to reset everything (e.g., after configuration changes):
 
-**View volume information:**
-```bash
-docker volume inspect devcontainer_home-data
+**Windows (PowerShell):**
+```powershell
+docker volume rm devcontainer_home-data
 ```
 
-**Backup the volume:**
-```bash
-docker run --rm -v devcontainer_home-data:/data -v $(pwd):/backup alpine tar czf /backup/home-data-backup.tar.gz -C /data .
-```
-
-**Restore the volume:**
-```bash
-docker run --rm -v devcontainer_home-data:/data -v $(pwd):/backup alpine sh -c "cd /data && rm -rf * && tar xzf /backup/home-data-backup.tar.gz"
-```
-
-**Remove the volume (WARNING: This deletes all persisted data):**
+**macOS/Linux:**
 ```bash
 docker volume rm devcontainer_home-data
 ```
 
-### Devcontainer Features and Volume Updates
+Then rebuild the container. All your data will be reset.
 
-Devcontainer features (like zsh/oh-my-zsh installation) run during container creation. On first run, the volume is empty and features install normally. On subsequent runs, the volume contains existing data, and features should handle this gracefully:
 
-- Features check for existing installations before installing
-- If you need to force a feature reinstall, remove the volume (see above) and rebuild
-- Configuration changes in devcontainer features may require volume cleanup if they conflict with existing configs
+## Development Tools
 
-## Multi-Platform Support
+The container includes:
 
-- **Linux**: Uses `/var/run/docker.sock`
-- **macOS**: Uses Docker Desktop socket
-- **Windows/WSL2**: Uses `/var/run/docker.sock` in WSL2
+- **PHP 8.3** with common extensions (bcmath, gd, intl, mbstring, mysqli, opcache, pdo, redis, xdebug, and more)
+- **Composer** for PHP dependency management
+- **Node.js** (via fnm) for JavaScript/TypeScript projects
+- **Git** and **GitHub CLI** for version control
+- **Docker** and **kubectl** for container orchestration
+- **Vault CLI** for secrets management
+- **fzf** for fuzzy finding in the terminal
 
-Path handling and home directory detection work across all platforms.
+## Additional Resources
 
-## PHP Extensions
+- [VS Code Dev Containers Documentation](https://code.visualstudio.com/docs/devcontainers/containers)
+- [Docker Documentation](https://docs.docker.com/)
+- [Cursor Documentation](https://cursor.sh/docs)
 
-The following PHP extensions are installed and enabled:
+## Getting Help
 
-- **Core Extensions**: bcmath, ftp, gd, intl, mbstring, mysqli, opcache, pcntl, pdo, pdo_mysql, pdo_pgsql, soap, sockets, zip
-- **PECL Extensions**: apcu, redis, xdebug
+If you encounter issues:
 
-All extensions are configured during container build and ready to use.
-
-## Local Devcontainer Features
-
-This repository includes custom devcontainer features:
-
-- `vault-cli` - HashiCorp Vault CLI
-- `fnm-node` - Fast Node Manager with Node.js
-- `composer-link-plugin` - Composer link plugin
-- `redis-cli` - Redis CLI client tools
-- `mysql-cli` - MySQL CLI client tools
-
-These features benefit from Docker layer caching for faster rebuilds.
-
-## Contributing
-
-When modifying this devcontainer:
-
-1. Test changes locally
-2. Verify multi-platform compatibility
-3. Update documentation
-4. Ensure services start correctly
-5. Test auth persistence across rebuilds
+1. Check the Troubleshooting section above
+2. Verify Docker Desktop is running and up to date
+3. Try rebuilding the container (F1 → "Dev Containers: Rebuild Container")
+4. Check the container logs in VS Code/Cursor output panel
 
 

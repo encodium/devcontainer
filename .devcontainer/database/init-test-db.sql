@@ -1,10 +1,9 @@
--- Initialize test database for CRITDB testing
--- This script creates the necessary databases and user permissions
+-- Initialize test databases for feature/integration testing
 
 -- Create test user
 CREATE USER IF NOT EXISTS 'test'@'%' IDENTIFIED BY 'test';
 
--- Create the main "default" database to keep Laravel happy
+-- Create the main "default" database to keep Laravel (Testbench/Workbench) happy
 CREATE DATABASE IF NOT EXISTS test;
 
 -- Create customer-specific databases (these will be used by Service tests)
