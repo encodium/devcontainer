@@ -254,7 +254,9 @@ Xdebug is pre-configured for VS Code/Cursor. The debugger listens on port 9003.
 
 ## Troubleshooting
 
-### Container Won't Start
+### Devcontainer Fails to Start
+
+#### Docker Daemon Not Running
 
 **Windows (WSL2)**: Ensure Docker daemon is running:
 ```bash
@@ -277,7 +279,37 @@ sudo systemctl status docker
 sudo systemctl start docker
 ```
 
-### Services Not Accessible
+#### Port Conflicts
+
+If the initialize script reports port conflicts or you get port binding errors, update the conflicting ports in `.devcontainer/.env`:
+
+```bash
+REDIS_EXTERNAL_PORT=6380
+MYSQL_EXTERNAL_PORT=3307
+LOCALSTACK_EXTERNAL_PORT=4567
+```
+
+**Suggested pattern**: Increment the hundreds place of each port number (e.g., 6379 → 6479).
+
+Then rebuild the container.
+
+#### Container is Slow
+
+First-time build downloads images and installs tools. Subsequent starts are faster. If the container feels slow:
+- Ensure you have enough disk space
+- Check Docker resource limits (if configured)
+- Try restarting the Docker daemon
+
+#### Environment File Issues
+
+If you see errors about missing `.env` file or invalid configuration:
+- Ensure `.devcontainer/.env` exists (copy from `.devcontainer/.env.example` if needed)
+- Verify all required variables are set
+- Check that `COMPOSE_PROJECT_NAME` is unique if you have multiple devcontainer instances
+
+### Other Issues (Inside Working Devcontainer)
+
+#### Services Not Accessible
 
 Test service connectivity:
 ```bash
@@ -287,7 +319,7 @@ test-services
 > [!TIP]
 > If services show ❌, they may still be starting. Wait a minute and try again.
 
-### Repository Cloning Fails
+#### Repository Cloning Fails
 
 Ensure GitHub CLI is authenticated:
 ```bash
@@ -296,23 +328,22 @@ gh auth status
 gh auth login
 ```
 
-### Port Conflicts
+#### Authentication Issues
 
-If you get port conflict errors, create `.devcontainer/.env` and set custom ports:
+**GitHub CLI**: If `gh` commands fail, re-authenticate:
 ```bash
-REDIS_EXTERNAL_PORT=6380
-MYSQL_EXTERNAL_PORT=3307
-LOCALSTACK_EXTERNAL_PORT=4567
+gh auth login
 ```
 
-Then rebuild the container.
+**Composer (Private Packagist)**: Get setup instructions:
+```bash
+setup packagist-auth
+```
 
-### Container is Slow
-
-First-time build downloads images and installs tools. Subsequent starts are faster. If the container feels slow:
-- Ensure you have enough disk space
-- Check Docker resource limits (if configured)
-- Try restarting the Docker daemon
+**npm (GitHub Packages)**: Configure using GitHub token:
+```bash
+setup npmrc
+```
 
 ## How It Works
 
@@ -381,8 +412,8 @@ The container includes:
 If you encounter issues:
 
 1. Check the Troubleshooting section above
-2. Verify Docker Engine is installed and running
-3. Try rebuilding the container (F1 → "Dev Containers: Rebuild Container")
-4. Check the container logs in VS Code/Cursor output panel
+2. Check the terminal logs. Docker and devcontainer build logs output here (<kbd>CTRL/⌘</kbd>+<kbd>`</kbd>)
+3. Try rebuilding the container (<kbd>F1</kbd> or <kbd>CTRL/⌘</kbd>+<kbd>SHIFT</kbd>+<kbd>P</kbd> → "Dev Containers: Rebuild Container")
+4. Check the other logs in VS Code/Cursor output panel
 
 
