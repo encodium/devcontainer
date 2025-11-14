@@ -17,15 +17,15 @@ ENV_EXAMPLE="$DEVCONTAINER_DIR/.env.example"
 
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ .env file not found at $ENV_FILE"
+    echo "⚠️ .env file not found at $ENV_FILE"
     echo ""
-    echo "   Copy the example file:"
-    echo "   cp $ENV_EXAMPLE $ENV_FILE"
+    echo "   Copying the example file..."
     echo ""
-    exit 1
+    cp $ENV_EXAMPLE $ENV_FILE
+    echo "✅ .env $ENV_FILE copied from $ENV_EXAMPLE"
+    echo ""
+    exit 0
 fi
-
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-devcontainer}"
 
 # Check if there's already a devcontainer running with the same project name
 if command -v docker &> /dev/null; then
