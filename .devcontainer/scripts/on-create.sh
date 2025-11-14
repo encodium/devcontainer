@@ -67,6 +67,9 @@ if [ -z "$SSH_AUTH_SOCK" ] || [ ! -S "$SSH_AUTH_SOCK" ]; then
     WARNINGS+=("SSH agent forwarding not available")
 fi
 
+# GitHub CLI authentication is available via ~/.github mount from host
+# No additional setup needed - the mount provides authentication automatically
+
 # Check GitHub CLI authentication
 GH_CONFIG_DIR="$HOME/.config/gh"
 GH_HOSTS_FILE="$GH_CONFIG_DIR/hosts.yml"

@@ -17,7 +17,8 @@
     "source=${localWorkspaceFolder}/workspace,target=/workspace,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/.devcontainer/scripts,target=/home/vscode/.devcontainer/scripts,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/logs,target=/home/vscode/.devcontainer/logs,type=bind,consistency=cached",
-    "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind"
+    "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind",
+    "source=${localEnv:HOME}/.github,target=/home/vscode/.github,type=bind,consistency=cached"
   ],
   "remoteEnv": {
     "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
@@ -54,6 +55,7 @@
       }
     }
   },
+  "initializeCommand": "bash ${localWorkspaceFolder}/.devcontainer/scripts/initialize.sh",
   "postCreateCommand": "bash ~/.devcontainer/scripts/on-create.sh",
   "postAttachCommand": "bash ~/.devcontainer/scripts/on-attach.sh",
   "remoteUser": "vscode",

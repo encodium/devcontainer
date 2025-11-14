@@ -22,22 +22,53 @@ A devcontainer is a Docker-based development environment that runs inside VS Cod
   - macOS: Install [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
   - Linux: Install [Docker Engine](https://docs.docker.com/engine/install/)
 - **Dev Containers extension** (usually installed automatically when opening a devcontainer)
+- **GitHub CLI** installed and authenticated on your host machine:
+  - **macOS**: `brew install gh` ([Homebrew](https://brew.sh/)) or follow [GitHub CLI installation instructions](https://github.com/cli/cli/blob/trunk/docs/install_macos.md)
+  - **Linux**: `brew install gh` ([Homebrew](https://brew.sh/)) or follow [GitHub CLI installation instructions](https://github.com/cli/cli/blob/trunk/docs/install_linux.md)
+  - **Windows**: Follow [GitHub CLI installation instructions](https://github.com/cli/cli/blob/trunk/docs/install_windows.md)
+  
+  After installation, authenticate:
+  ```bash
+  gh auth login
+  gh auth setup-git
+  ```
+
+### Other IDEs such as PhpStorm
+
+Instructions TBD using `devcontainer` CLI tools
 
 ## Quick Start
 
-1. **Clone this repository** to your local machine
-2. **Open in VS Code/Cursor**: Open the repository folder in your editor
-3. **Reopen in Container**: When prompted, click "Reopen in Container" (or press `F1` and select "Dev Containers: Reopen in Container")
-4. **Wait for setup**: The container will build and start services automatically (first time may take a few minutes)
-5. **Clone your repositories**: Once inside the container, run:
+1. **Clone this repository** to your local machine:
+   ```bash
+   git clone https://github.com/encodium/devcontainer.git
+   cd devcontainer
+   ```
+
+2. **Copy the environment file** (if `.env.example` exists):
+   ```bash
+   cp .devcontainer/.env.example .devcontainer/.env
+   ```
+  - If you have multiple clones of the `devcontainer` repo, you must ensure the `COMPOSE_PROJECT_NAME` variable in your `.env` file is unique from the others
+  - You must also ensure all `_EXTERNAL_` port numbers are unique from the others or docker will fail to start all services
+
+3. **Open in VS Code/Cursor**: Open the repository folder in your editor
+
+4. **Reopen in Container**: When prompted, click "Reopen in Container" (or press `F1` and select "Dev Containers: Reopen in Container")
+
+5. **Wait for setup**: The container will build and start services automatically (first time may take a few minutes)
+
+6. **Clone your repositories**: Once inside the container, run:
    ```bash
    clone-repos batch,common
    ```
-6. **Link common repository** (if needed):
+
+7. **Link common repository** (if needed):
    ```bash
    setup composer-link
    ```
-7. **Configure authentication** (see Authentication section below)
+
+8. **Configure additional authentication** (see Authentication section below)
 
 ## Available Commands
 
@@ -76,7 +107,7 @@ Once inside the container, you have access to these commands:
 
 ### Environment Variables
 
-You can customize the devcontainer by creating a `.env` file in the workspace root (`.devcontainer/.env.example` shows available options):
+You can customize the devcontainer by creating a `.env` file in the `.devcontainer` directory. If `.env.example` exists, copy it to get started:
 
 ```bash
 # Repository Configuration
@@ -142,13 +173,17 @@ Authentication credentials persist across container rebuilds. Configure them onc
 
 ### GitHub CLI
 
-Required for cloning repositories:
+Required for cloning repositories. Authentication is automatically available via mount from your host machine.
+
+**Manual Authentication (if needed):**
+
+If you need to update your authentication, you can run this on your host machine or inside the container:
 
 ```bash
 gh auth login
 ```
 
-Follow the prompts to authenticate. Your credentials are saved in the persistent home volume.
+Follow the prompts to authenticate. Your credentials will be saved in the persistent home volume.
 
 ### Composer (Private Packagist)
 
