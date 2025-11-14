@@ -5,6 +5,11 @@
 
 set -e
 
+# Load .env file
+set -a
+source "$ENV_FILE" 2>/dev/null || true
+set +a
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVCONTAINER_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$DEVCONTAINER_DIR/.env"
@@ -17,6 +22,35 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "   Copy the example file:"
     echo "   cp $ENV_EXAMPLE $ENV_FILE"
     echo ""
+    exit 1
+fi
+
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-devcontainer}"
+
+# Check if there's already a devcontainer running with the same project name
+if command -v docker &> /dev/null; then
+    # Check for running containers with this project name
+    # Docker Compose prefixes container names with the project name (e.g., "projectname-shell-1")
+    # We check for containers that start with the project name followed by a hyphen
+    ALL_CONTAINERS=$(docker ps --format "{{.Names}}" 2>/dev/null || true)
+    RUNNING_CONTAINERS=$(echo "$ALL_CONTAINERS" | grep "^${COMPOSE_PROJECT_NAME}-" || true)
+    
+    if [ -n "$RUNNING_CONTAINERS" ]; then
+        echo "❌ It appears a devcontainer is already running with the same project name. COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
+        echo ""
+        echo "   Running containers:"
+        echo "$RUNNING_CONTAINERS" | sed 's/^/     /'
+        echo ""
+        echo "   To fix this:"
+        echo "   1. Stop the existing devcontainer, or"
+        echo "   2. Change COMPOSE_PROJECT_NAME in $ENV_FILE to a unique value (will create new, empty separate services like redis, mysql, localstack, etc. without shared data)"
+        echo ""
+        exit 1
+    fi
+else
+    echo "❌ Docker is not installed."
+    echo ""
+    echo "   Install it first. Check the README for installation instructions."
     exit 1
 fi
 
