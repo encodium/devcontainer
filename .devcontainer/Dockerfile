@@ -102,7 +102,7 @@ RUN --mount=type=cache,target=${BREW_PREFIX}/var/cache,uid=1000,gid=1000 \
     --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
     sudo chown -R vscode:vscode ${BREW_PREFIX} /home/vscode/.cache && \
     eval "$(${BREW_PREFIX}/bin/brew shellenv)" && \
-    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat
+    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat just
 
 # Install composer-link plugin globally
 RUN composer global config --no-plugins allow-plugins.sandersander/composer-link true && \

@@ -58,6 +58,11 @@ fi
 # Fix ownership for Homebrew directories, installer gives uid/gid of 999 at this time
 sudo chown -R vscode:vscode /home/linuxbrew /home/vscode/.cache
 
+# Symlink PHP to standard location for compatibility. Batch uses this path in its shebang
+if [ ! -L /usr/bin/php ] || [ "$(readlink -f /usr/bin/php)" != "/usr/local/bin/php" ]; then
+    sudo ln -sf /usr/local/bin/php /usr/bin/php
+fi
+
 # Check for issues and collect warnings
 WARNINGS=()
 MISSING_AUTH=()
@@ -128,28 +133,36 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
 fi
 
 # Display next steps (only if there are missing auth items)
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📋 Next Steps"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ ${#MISSING_AUTH[@]} -gt 0 ]; then
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📋 Next Steps"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "Authentication Setup:"
     for auth in "${MISSING_AUTH[@]}"; do
         case "$auth" in
             github-cli)
-                echo "  • GitHub CLI: setup github-cli"
+                echo "  • GitHub CLI: dc github-cli"
                 echo "    Or run: gh auth login"
                 ;;
             packagist)
-                echo "  • Private Packagist: setup packagist-auth"
+                echo "  • Private Packagist: dc packagist-auth"
                 echo "    Visit: https://packagist.com/orgs/encodium"
                 ;;
             npm)
-                echo "  • npm: setup npmrc"
+                echo "  • npm: dc npmrc"
                 echo "    Uses GitHub token from gh auth"
                 ;;
         esac
     done
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
+echo ""
+echo "Repository Setup:"
+echo "  • Clone repositories: dc clone-repos [repo1,repo2,...]"
+echo "  • Link common repo: dc link-common"
+echo ""
+echo "Verification:"
+echo "  • Test environment: dc test-env"
+echo "  • Verify using tests in common repo that connect to services: cd /workspace/common && composer run test:src:feature"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

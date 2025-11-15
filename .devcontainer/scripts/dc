@@ -1,0 +1,533 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Load environment variables from root .env if it exists
+if [ -f "/workspace/.env" ]; then
+    set -a
+    source /workspace/.env
+    set +a
+fi
+
+# Setup Private Packagist authentication for Composer
+dc-packagist-auth() {
+    echo "🔐 Checking Private Packagist authentication..."
+    echo ""
+    
+    COMPOSER_AUTH_FILE="$HOME/.composer/auth.json"
+    if [ -f "$COMPOSER_AUTH_FILE" ] && grep -q "repo.packagist.com" "$COMPOSER_AUTH_FILE" 2>/dev/null; then
+        echo "✅ Private Packagist authentication is configured"
+        return 0
+    fi
+    
+    echo "❌ Private Packagist authentication not configured"
+    echo ""
+    echo "To configure Private Packagist authentication:"
+    echo ""
+    echo "1. Visit: https://packagist.com/orgs/encodium"
+    echo "2. Go to the 'Setup authentication' section"
+    echo "3. Copy and paste the command provided by Packagist"
+    echo ""
+    echo "The command will look like:"
+    echo "   composer config --global --auth http-basic.repo.packagist.com <username> <password>"
+    echo ""
+    echo "Credentials will persist in the home volume after configuration."
+    return 1
+}
+
+# Setup npm authentication
+dc-npmrc() {
+    echo "🔐 Checking npm authentication..."
+    echo ""
+    
+    NPMRC_FILE="$HOME/.npmrc"
+    if [ -f "$NPMRC_FILE" ] && grep -q "@encodium:registry" "$NPMRC_FILE" 2>/dev/null && grep -q "npm.pkg.github.com" "$NPMRC_FILE" 2>/dev/null; then
+        echo "✅ npm authentication is configured"
+        return 0
+    fi
+    
+    echo "❌ npm authentication not configured"
+    echo ""
+    
+    # Try to configure automatically if GitHub CLI is authenticated
+    if ! gh auth status &>/dev/null; then
+        echo "GitHub CLI authentication required to configure npm"
+        echo ""
+        echo "   Run: dc github-cli"
+        echo "   Then run: dc npmrc"
+        return 1
+    fi
+    
+    local token
+    if ! token=$(gh auth token 2>/dev/null); then
+        echo "❌ Failed to get GitHub token"
+        echo "   Ensure GitHub CLI is authenticated: dc github-cli"
+        return 1
+    fi
+    
+    echo "Configuring npm authentication automatically..."
+    if {
+        echo "@encodium:registry=https://npm.pkg.github.com/"
+        echo "//npm.pkg.github.com/:_authToken=$token"
+    } > "$NPMRC_FILE"; then
+        chmod 600 "$NPMRC_FILE"
+        echo "✅ npm authentication configured at $NPMRC_FILE"
+        echo "   Using GitHub Packages registry for @encodium scope"
+        echo "   Credentials will persist in the home volume"
+        return 0
+    else
+        echo "❌ Failed to configure npm authentication"
+        return 1
+    fi
+}
+
+# Setup GitHub CLI authentication
+dc-github-cli() {
+    echo "🔐 Checking GitHub CLI authentication..."
+    echo ""
+    
+    if gh auth status &>/dev/null; then
+        echo "✅ GitHub CLI is authenticated"
+        return 0
+    fi
+    
+    echo "❌ GitHub CLI is not authenticated"
+    echo ""
+    echo "To authenticate GitHub CLI:"
+    echo ""
+    echo "   Run: gh auth login"
+    echo ""
+    echo "   Follow the prompts to authenticate. Credentials will persist in the home volume."
+    return 1
+}
+
+# Clone repositories configured in REPOS_TO_CLONE environment variable
+dc-clone-repos() {
+    # Determine which repos to clone
+    if [ $# -gt 0 ]; then
+        REPOS_TO_CLONE="$*"
+    fi
+    
+    echo "📦 Cloning repositories..."
+    echo "   Configured repos: $REPOS_TO_CLONE"
+    echo ""
+    
+    # Check GitHub CLI authentication
+    if ! gh auth status &>/dev/null; then
+        echo "❌ ERROR: GitHub CLI authentication required to clone repositories"
+        echo ""
+        echo "   To configure GitHub CLI authentication:"
+        echo "   1. Mount ~/.config/gh from host (if you have it configured on host), or"
+        echo "   2. Run the following command:"
+        echo "      gh auth login"
+        echo ""
+        return 1
+    fi
+    
+    # Ensure workspace directory exists
+    if [ ! -d "/workspace" ]; then
+        mkdir -p /workspace
+        echo "✅ Created /workspace directory"
+    fi
+    
+    # Clone repos
+    IFS=',' read -ra REPOS <<< "$REPOS_TO_CLONE"
+    SUCCESS_COUNT=0
+    FAIL_COUNT=0
+    SKIP_COUNT=0
+    
+    for repo in "${REPOS[@]}"; do
+        repo=$(echo "$repo" | xargs) # trim whitespace
+        if [ -z "$repo" ]; then
+            continue
+        fi
+        
+        repo_path="/workspace/$repo"
+        
+        if [ -d "$repo_path" ] && [ -d "$repo_path/.git" ]; then
+            echo "✅ Repository '$repo' already exists at $repo_path"
+            SKIP_COUNT=$((SKIP_COUNT + 1))
+        else
+            echo "📦 Cloning repository: encodium/$repo..."
+            if gh repo clone "encodium/$repo" "$repo_path" 2>&1; then
+                echo "✅ Successfully cloned encodium/$repo"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                
+                # Install dependencies if present, replace with justfile at some point...
+                cd "$repo_path"
+                
+                # Run composer install if composer.json exists
+                if [ -f "composer.json" ]; then
+                    echo "   Installing Composer dependencies..."
+                    if composer install --no-interaction 2>&1; then
+                        echo "   ✅ Composer dependencies installed"
+                    else
+                        echo "   ⚠️  Composer install had issues (may need authentication)"
+                    fi
+                fi
+                
+                # Run npm install if package.json exists
+                if [ -f "package.json" ]; then
+                    echo "   Installing npm dependencies..."
+                    if npm install 2>&1; then
+                        echo "   ✅ npm dependencies installed"
+                    else
+                        echo "   ⚠️  npm install had issues (may need authentication)"
+                    fi
+                fi
+            else
+                echo "❌ Failed to clone encodium/$repo"
+                echo "   This may be due to:"
+                echo "   - Repository doesn't exist or you don't have access"
+                echo "   - GitHub CLI authentication issue (run 'gh auth login')"
+                echo "   - Network connectivity issue"
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+            fi
+            echo ""
+        fi
+    done
+    
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📊 Clone Summary"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   Successfully cloned: $SUCCESS_COUNT"
+    echo "   Already existed: $SKIP_COUNT"
+    echo "   Failed: $FAIL_COUNT"
+    echo ""
+    
+    if [ $FAIL_COUNT -gt 0 ]; then
+        echo "⚠️  Some repositories failed to clone. Check the errors above."
+        echo "   You can retry cloning specific repos: dc clone-repos repo1,repo2"
+        return 1
+    elif [ $SUCCESS_COUNT -gt 0 ]; then
+        echo "✅ All repositories cloned successfully!"
+        echo ""
+        echo "   Next step: Link common repo to other repositories:"
+        echo "      dc link-common"
+    fi
+}
+
+# Link common repo to all workspace repositories using composer-link
+dc-link-common() {
+    local common_path="${COMMON_REPO_PATH}"
+    
+    echo "🔗 Linking common repo to workspace repositories..."
+    echo ""
+    
+    # Check if composer-link plugin is available
+    if ! composer help link &>/dev/null; then
+        echo "❌ ERROR: composer-link plugin not found"
+        echo ""
+        echo "   The composer-link plugin should be installed in the Dockerfile."
+        echo "   If it's missing, install it with:"
+        echo "      composer global require sandersander/composer-link"
+        echo ""
+        return 1
+    fi
+    
+    # Check if common repo exists
+    if [ ! -d "$common_path" ]; then
+        echo "❌ ERROR: Common repo not found at $common_path"
+        echo ""
+        echo "   The common repo must be cloned first. Run:"
+        echo "      dc clone-repos common"
+        echo ""
+        echo "   Or ensure the common repo exists at: $common_path"
+        return 1
+    fi
+    
+    # Check if common repo has composer.json
+    if [ ! -f "$common_path/composer.json" ]; then
+        echo "❌ ERROR: composer.json not found in common repo at $common_path"
+        echo ""
+        echo "   The common repo must be a valid Composer package with a composer.json file."
+        return 1
+    fi
+    
+    # Get all repos in workspace (excluding common)
+    local repos=()
+    for dir in /workspace/*; do
+        if [ -d "$dir" ] && [ -d "$dir/.git" ] && [ "$(basename "$dir")" != "common" ]; then
+            repos+=("$dir")
+        fi
+    done
+    
+    if [ ${#repos[@]} -eq 0 ]; then
+        echo "⚠️  No other repositories found in /workspace to link"
+        echo ""
+        echo "   Clone some repositories first:"
+        echo "      dc clone-repos batch"
+        echo ""
+        return 0
+    fi
+    
+    echo "Found ${#repos[@]} repository/repositories to link:"
+    for repo in "${repos[@]}"; do
+        echo "  - $(basename "$repo")"
+    done
+    echo ""
+    
+    # Link common to each repo
+    local SUCCESS_COUNT=0
+    local FAIL_COUNT=0
+    local SKIP_COUNT=0
+    
+    for repo in "${repos[@]}"; do
+        local repo_name=$(basename "$repo")
+        echo "📦 Linking common to $repo_name..."
+        
+        # Check if repo has composer.json
+        if [ ! -f "$repo/composer.json" ]; then
+            echo "⚠️  Skipping $repo_name: no composer.json found"
+            SKIP_COUNT=$((SKIP_COUNT + 1))
+            echo ""
+            continue
+        fi
+        
+        # Check if already linked
+        if [ -L "$repo/vendor/common" ] || [ -d "$repo/vendor/common" ]; then
+            if [ -L "$repo/vendor/common" ] && [ "$(readlink -f "$repo/vendor/common")" = "$(readlink -f "$common_path")" ]; then
+                echo "✅ $repo_name already linked to common"
+                SKIP_COUNT=$((SKIP_COUNT + 1))
+                echo ""
+                continue
+            fi
+        fi
+        
+        # Change to repo directory and link common
+        cd "$repo"
+        
+        if composer link "$common_path" 2>&1; then
+            echo "✅ Successfully linked common to $repo_name"
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        else
+            echo "❌ Failed to link common to $repo_name"
+            echo "   This may be due to:"
+            echo "   - Composer dependency conflicts"
+            echo "   - Missing composer.json or invalid configuration"
+            echo "   - Permission issues"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+        fi
+        echo ""
+    done
+    
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📊 Link Summary"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   Successfully linked: $SUCCESS_COUNT"
+    echo "   Already linked: $SKIP_COUNT"
+    echo "   Failed: $FAIL_COUNT"
+    echo ""
+    
+    if [ $FAIL_COUNT -gt 0 ]; then
+        echo "⚠️ Some repositories failed to link. Check the errors above."
+        return 1
+    elif [ $SUCCESS_COUNT -gt 0 ]; then
+        echo "✅ All repositories linked successfully!"
+    fi
+}
+
+# Test environment (services and CLI authentication)
+dc-test-env() {
+    echo "Testing environment..."
+    echo ""
+    
+    local issues=0
+    
+    # Test services
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Services"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    echo -n "Redis: "
+    if redis-cli -h "${REDIS_HOST}" -p 6379 ping &>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+        issues=$((issues + 1))
+    fi
+    
+    echo -n "MySQL: "
+    if MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -e "SELECT 1;" &>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+        issues=$((issues + 1))
+    fi
+    
+    echo -n "LocalStack: "
+    if curl -sf http://localstack:4566/_localstack/health | grep -q '"services":' 2>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+        issues=$((issues + 1))
+    fi
+    
+    echo ""
+    
+    # Test CLI authentication
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "CLI Authentication"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    echo -n "GitHub CLI: "
+    if gh auth status &>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+        issues=$((issues + 1))
+    fi
+    
+    echo -n "Composer (Private Packagist): "
+    COMPOSER_AUTH_FILE="$HOME/.composer/auth.json"
+    if [ -f "$COMPOSER_AUTH_FILE" ] && grep -q "repo.packagist.com" "$COMPOSER_AUTH_FILE" 2>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+        issues=$((issues + 1))
+    fi
+    
+    echo -n "npm (GitHub Packages): "
+    NPMRC_FILE="$HOME/.npmrc"
+    if [ -f "$NPMRC_FILE" ] && grep -q "@encodium:registry" "$NPMRC_FILE" 2>/dev/null && grep -q "npm.pkg.github.com" "$NPMRC_FILE" 2>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+        issues=$((issues + 1))
+    fi
+    
+    echo ""
+    
+    if [ $issues -eq 0 ]; then
+        echo "✅ All checks passed!"
+        return 0
+    else
+        echo "⚠️  Found $issues issue(s). Run 'dc help' for setup instructions."
+        return 1
+    fi
+}
+
+# Display help/quick reference
+dc-help() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📋 Quick Reference"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Available Commands:"
+    echo "  dc <command>            - Run our custom devcontainer commands"
+    echo ""
+    echo "Repository Management:"
+    echo "  dc clone-repos [repos]  - Clone repositories (e.g., dc clone-repos batch,common)"
+    echo "  dc link-common          - Link common repo to all workspace repositories"
+    echo ""
+    echo "Authentication Setup:"
+    echo "  dc packagist-auth       - Check and configure Private Packagist authentication"
+    echo "  dc npmrc                - Check and configure npm authentication using GitHub token"
+    echo "  dc github-cli           - Check GitHub CLI authentication status"
+    echo ""
+    echo "Environment Testing:"
+    echo "  dc test-env             - Test connectivity to services and CLI authentication"
+    echo ""
+    echo "Available Aliases:"
+    echo "  redis                   - Connect to Redis at ${REDIS_HOST}:6379"
+    echo "  mysql                   - Connect to MySQL at ${MYSQL_HOST}:3306"
+    echo "  awslocal                - AWS CLI with LocalStack endpoint (http://localstack:4566)"
+    echo "  k                       - kubectl shortcut"
+    echo ""
+    echo "Service Connection Info:"
+    echo "  Redis:      ${REDIS_HOST}:6379 (internal Docker network) / localhost:${REDIS_EXTERNAL_PORT} (external host)"
+    echo "  MySQL:      ${MYSQL_HOST}:3306 (internal Docker network) / localhost:${MYSQL_EXTERNAL_PORT} (external host)"
+    echo "  LocalStack: http://localstack:4566 (internal Docker network) / http://localhost:${LOCALSTACK_EXTERNAL_PORT} (external host)"
+    echo ""
+    echo "For more information, see: https://github.com/encodium/devcontainer"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Run all setup functions
+dc-all() {
+    echo "🚀 Running all setup functions..."
+    echo ""
+    
+    local failed=0
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "1. GitHub CLI"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if ! dc-github-cli; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "2. Private Packagist"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if ! dc-packagist-auth; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "3. npm"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if ! dc-npmrc; then
+        failed=$((failed + 1))
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ $failed -eq 0 ]; then
+        echo "✅ All setup functions completed"
+    else
+        echo "⚠️  Some setup functions failed or were skipped"
+    fi
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    return $failed
+}
+
+# Main function dispatcher
+main() {
+    local command="${1:-help}"
+    
+    case "$command" in
+        packagist-auth)
+            dc-packagist-auth
+            ;;
+        npmrc)
+            dc-npmrc
+            ;;
+        github-cli)
+            dc-github-cli
+            ;;
+        clone-repos)
+            shift
+            dc-clone-repos "$@"
+            ;;
+        link-common)
+            dc-link-common
+            ;;
+        test-env)
+            dc-test-env
+            ;;
+        help|--help|-h)
+            dc-help
+            ;;
+        all)
+            dc-all
+            ;;
+        *)
+            echo "Unknown command: $command"
+            echo ""
+            dc-help
+            exit 1
+            ;;
+    esac
+}
+
+# If script is executed directly (not sourced), run main
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@"
+fi
+

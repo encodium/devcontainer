@@ -71,12 +71,12 @@ Instructions TBD using `devcontainer` CLI tools
 
 6. **Clone your repositories**: Once inside the container, run:
    ```bash
-   clone-repos batch,common
+   dc clone-repos batch,common
    ```
 
 7. **Link common repository** (if needed):
    ```bash
-   setup composer-link
+   dc link-common
    ```
 
 8. **Configure additional authentication** (see Authentication section below)
@@ -85,33 +85,27 @@ Instructions TBD using `devcontainer` CLI tools
 
 Once inside the container, you have access to these commands:
 
-### Repository Management
+### Devcontainer Commands (`dc`)
 
-- **`clone-repos [repo1,repo2,...]`** - Clone repositories from the `encodium` organization
+All devcontainer commands are accessed via the `dc` command:
+
+- **`dc help`** - Show quick reference guide
+- **`dc clone-repos [repo1,repo2,...]`** - Clone repositories from the `encodium` organization
   ```bash
-  clone-repos batch,common,webstore
-  # Or use default from .env: clone-repos
+  dc clone-repos batch,common,webstore
+  # Or use default from .env: dc clone-repos
   ```
+- **`dc link-common`** - Link the common repository to all workspace repositories using composer-link
+- **`dc test-env`** - Test connectivity to all services and CLI authentication status
+- **`dc packagist-auth`** - Check and configure Private Packagist authentication
+- **`dc npmrc`** - Check and configure npm authentication using GitHub CLI token
+- **`dc github-cli`** - Check GitHub CLI authentication status
 
-- **`link-common`** - Link the common repository to all workspace repositories using composer-link
-  ```bash
-  link-common
-  ```
-
-### Setup & Configuration
-
-- **`setup`** - Run all setup functions (authentication, etc.)
-- **`setup packagist-auth`** - Get instructions for configuring Private Packagist authentication
-- **`setup npmrc`** - Configure npm authentication using GitHub CLI token
-- **`setup composer-link`** - Link common repo to all workspace repositories
-- **`setup github-cli`** - Check GitHub CLI authentication status
-
-### Service Access
+### Service Access Aliases
 
 - **`redis`** - Connect to Redis CLI
 - **`mysql`** - Connect to MySQL CLI
 - **`awslocal`** - AWS CLI with LocalStack endpoint pre-configured
-- **`test-services`** - Test connectivity to all services
 - **`k`** - Shortcut for `kubectl`
 
 ## Configuration
@@ -145,10 +139,10 @@ LOCALSTACK_EXTERNAL_PORT=4566
 Clone additional repositories anytime:
 
 ```bash
-clone-repos new-repo,another-repo
+dc clone-repos new-repo,another-repo
 ```
 
-Or add them to `REPOS_TO_CLONE` in `.env` and run `clone-repos` without arguments.
+Or add them to `REPOS_TO_CLONE` in `.env` and run `dc clone-repos` without arguments.
 
 ## Services
 
@@ -176,7 +170,7 @@ The devcontainer includes three services that start automatically:
 - **Credentials**: `test` / `test` (access key / secret key)
 - **CLI**: Run `awslocal s3 ls` or similar commands
 
-**Testing Services**: Run `test-services` to verify all services are accessible.
+**Testing Services**: Run `dc test-env` to verify all services and CLI authentication are accessible.
 
 ## Authentication
 
@@ -201,7 +195,7 @@ Follow the prompts to authenticate. Your credentials will be saved in the persis
 Get setup instructions:
 
 ```bash
-setup packagist-auth
+dc packagist-auth
 ```
 
 This will show you how to configure authentication. Visit https://packagist.com/orgs/encodium to get your credentials.
@@ -211,7 +205,7 @@ This will show you how to configure authentication. Visit https://packagist.com/
 Automatically configured using your GitHub CLI token:
 
 ```bash
-setup npmrc
+dc npmrc
 ```
 
 This uses your existing GitHub CLI authentication, so make sure `gh auth login` is done first.
@@ -226,7 +220,7 @@ The `common` repository can be linked to all other repositories for local develo
 
 **Link common to all repositories:**
 ```bash
-setup composer-link
+dc link-common
 ```
 
 **Unlink (if needed):**
@@ -311,9 +305,9 @@ If you see errors about missing `.env` file or invalid configuration:
 
 #### Services Not Accessible
 
-Test service connectivity:
+Test service connectivity and CLI authentication:
 ```bash
-test-services
+dc test-env
 ```
 
 > [!TIP]
@@ -337,12 +331,12 @@ gh auth login
 
 **Composer (Private Packagist)**: Get setup instructions:
 ```bash
-setup packagist-auth
+dc packagist-auth
 ```
 
 **npm (GitHub Packages)**: Configure using GitHub token:
 ```bash
-setup npmrc
+dc npmrc
 ```
 
 ## How It Works

@@ -26,31 +26,3 @@ alias awslocal='AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_RE
 
 # Kubectl shortcut
 alias k='kubectl'
-
-# Helper function to test service connectivity
-test-services() {
-    echo "Testing service connectivity..."
-    
-    echo -n "Redis: "
-    if redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ping &>/dev/null; then
-        echo "✅"
-    else
-        echo "❌"
-    fi
-    
-    echo -n "MySQL: "
-    if mysql -e "SELECT 1;" &>/dev/null; then
-        echo "✅"
-    else
-        echo "❌"
-    fi
-    
-    echo -n "LocalStack: "
-    if curl -sf http://localstack:4566/_localstack/health | grep -q '"services":' 2>/dev/null; then
-        echo "✅"
-    else
-        echo "❌"
-    fi
-}
-
-

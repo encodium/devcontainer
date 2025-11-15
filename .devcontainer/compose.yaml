@@ -54,7 +54,6 @@ services:
     image: localstack/localstack:latest
     ports:
       - "${LOCALSTACK_EXTERNAL_PORT:-4566}:${LOCALSTACK_PORT:-4566}"
-      - "${LOCALSTACK_EXTERNAL_PORT_RANGE_START:-4510}-${LOCALSTACK_EXTERNAL_PORT_RANGE_END:-4559}:${LOCALSTACK_PORT_RANGE_START:-4510}-${LOCALSTACK_PORT_RANGE_END:-4559}"
     environment:
       - SERVICES=s3,sqs,sns
       - DEBUG=1
@@ -79,4 +78,6 @@ volumes:
 
 networks:
   rp:
+    driver: bridge
+    enable_ipv6: false
 

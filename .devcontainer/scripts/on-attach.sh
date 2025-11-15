@@ -65,14 +65,8 @@ fi
 # Check for issues
 WARNINGS=()
 
-# Check service connectivity (non-blocking, just warn)
-REDIS_HOST="${REDIS_HOST:-redis}"
-MYSQL_HOST="${MYSQL_HOST:-mysql}"
-MYSQL_USER="${MYSQL_USER:-dev}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-dev}"
-MYSQL_DATABASE="${MYSQL_DATABASE:-dev}"
 
-if ! redis-cli -h "${REDIS_HOST}" -p 6379 ping &>/dev/null; then
+if ! redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ping &>/dev/null; then
     WARNINGS+=("Redis service not reachable")
 fi
 
@@ -92,31 +86,6 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
         echo "   - $warning"
     done
     echo ""
-    echo "   Services may still be starting. Run 'test-services' to check connectivity."
+    echo "   Services may still be starting. Run 'dc test-env' to check connectivity."
     echo ""
 fi
-
-# Display quick reference
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📋 Quick Reference"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "Available Commands:"
-echo "  setup <command>     - Run setup functions (packagist-auth, npmrc, composer-link, github-cli)"
-echo "  clone-repos         - Clone repositories configured in REPOS_TO_CLONE"
-echo "  link-common         - Link common repo to all workspace repositories"
-echo "  test-services       - Test connectivity to all services"
-echo ""
-echo "Available Aliases:"
-echo "  redis               - Connect to Redis at ${REDIS_HOST}:6379"
-echo "  mysql               - Connect to MySQL at ${MYSQL_HOST}:3306"
-echo "  awslocal            - AWS CLI with LocalStack endpoint (http://localstack:4566)"
-echo "  k                   - kubectl shortcut"
-echo ""
-echo "Service Connection Info:"
-echo "  Redis:     ${REDIS_HOST}:6379 (internal Docker network) / localhost:${REDIS_EXTERNAL_PORT:-6379} (external host)"
-echo "  MySQL:     ${MYSQL_HOST}:3306 (internal Docker network) / localhost:${MYSQL_EXTERNAL_PORT:-3306} (external host)"
-echo "  LocalStack: http://localstack:4566 (internal Docker network) / http://localhost:${LOCALSTACK_EXTERNAL_PORT:-4566} (external host)"
-echo ""
-echo "For more information, see: ~/.devcontainer/README.md"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
