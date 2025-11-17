@@ -1,5 +1,6 @@
 .env
-.env.local
+.env.run
+.npmrc.host
 workspace/*
 !workspace/.gitkeep
 logs/*

@@ -41,13 +41,23 @@ dc-npmrc() {
     echo ""
     
     NPMRC_FILE="$HOME/.npmrc"
+    
+    # Check if .npmrc already exists and has the required configuration
     if [ -f "$NPMRC_FILE" ] && grep -q "@encodium:registry" "$NPMRC_FILE" 2>/dev/null && grep -q "npm.pkg.github.com" "$NPMRC_FILE" 2>/dev/null; then
         echo "✅ npm authentication is configured"
         return 0
     fi
     
-    echo "❌ npm authentication not configured"
-    echo ""
+    # If .npmrc exists but doesn't have the required config, check if it was imported from host
+    if [ -f "$NPMRC_FILE" ]; then
+        echo "ℹ️  .npmrc file exists but missing GitHub Packages configuration for @encodium scope"
+        echo ""
+        echo "   The file will be updated to add the required configuration."
+        echo ""
+    else
+        echo "❌ npm authentication not configured"
+        echo ""
+    fi
     
     # Try to configure automatically if GitHub CLI is authenticated
     if ! gh auth status &>/dev/null; then
@@ -66,19 +76,32 @@ dc-npmrc() {
     fi
     
     echo "Configuring npm authentication automatically..."
-    if {
-        echo "@encodium:registry=https://npm.pkg.github.com/"
-        echo "//npm.pkg.github.com/:_authToken=$token"
-    } > "$NPMRC_FILE"; then
-        chmod 600 "$NPMRC_FILE"
-        echo "✅ npm authentication configured at $NPMRC_FILE"
-        echo "   Using GitHub Packages registry for @encodium scope"
-        echo "   Credentials will persist in the home volume"
-        return 0
+    
+    # If .npmrc exists, append to it; otherwise create new file
+    if [ -f "$NPMRC_FILE" ]; then
+        # Check if the entries already exist to avoid duplicates
+        if ! grep -q "@encodium:registry" "$NPMRC_FILE" 2>/dev/null; then
+            echo "@encodium:registry=https://npm.pkg.github.com/" >> "$NPMRC_FILE"
+        fi
+        if ! grep -q "//npm.pkg.github.com/:_authToken" "$NPMRC_FILE" 2>/dev/null; then
+            echo "//npm.pkg.github.com/:_authToken=$token" >> "$NPMRC_FILE"
+        else
+            # Update existing token
+            sed -i "s|//npm.pkg.github.com/:_authToken=.*|//npm.pkg.github.com/:_authToken=$token|" "$NPMRC_FILE" 2>/dev/null || \
+            sed "s|//npm.pkg.github.com/:_authToken=.*|//npm.pkg.github.com/:_authToken=$token|" "$NPMRC_FILE" > "${NPMRC_FILE}.tmp" && mv "${NPMRC_FILE}.tmp" "$NPMRC_FILE"
+        fi
     else
-        echo "❌ Failed to configure npm authentication"
-        return 1
+        {
+            echo "@encodium:registry=https://npm.pkg.github.com/"
+            echo "//npm.pkg.github.com/:_authToken=$token"
+        } > "$NPMRC_FILE"
     fi
+    
+    chmod 600 "$NPMRC_FILE"
+    echo "✅ npm authentication configured at $NPMRC_FILE"
+    echo "   Using GitHub Packages registry for @encodium scope"
+    echo "   Credentials will persist in the home volume"
+    return 0
 }
 
 # Setup GitHub CLI authentication

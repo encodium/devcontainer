@@ -6,6 +6,7 @@ services:
     command: sleep infinity
     env_file:
       - .env
+      - .env.run
     depends_on:
       - redis
       - mysql

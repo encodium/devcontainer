@@ -9,6 +9,37 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVCONTAINER_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$DEVCONTAINER_DIR/.env"
 ENV_EXAMPLE="$DEVCONTAINER_DIR/.env.example"
+ENV_RUN_FILE="$DEVCONTAINER_DIR/.env.run"
+
+# Function to set or update an environment variable in .env.run file
+# Usage: set_env_var <VAR_NAME> <VAR_VALUE>
+set_env_var() {
+    local var_name="$1"
+    local var_value="$2"
+    
+    if [ -z "$var_name" ] || [ -z "$var_value" ]; then
+        return 1
+    fi
+    
+    if [ -f "$ENV_RUN_FILE" ]; then
+        if grep -q "^${var_name}=" "$ENV_RUN_FILE" 2>/dev/null; then
+            # Update existing variable
+            if sed -i.bak "s|^${var_name}=.*|${var_name}=${var_value}|" "$ENV_RUN_FILE" 2>/dev/null; then
+                rm -f "${ENV_RUN_FILE}.bak"
+            else
+                # Fallback if sed -i doesn't work (e.g., on macOS)
+                sed "s|^${var_name}=.*|${var_name}=${var_value}|" "$ENV_RUN_FILE" > "${ENV_RUN_FILE}.tmp" && mv "${ENV_RUN_FILE}.tmp" "$ENV_RUN_FILE"
+            fi
+        else
+            # Append variable if it doesn't exist
+            echo "${var_name}=${var_value}" >> "$ENV_RUN_FILE"
+        fi
+    else
+        # Create new file with variable
+        echo "${var_name}=${var_value}" > "$ENV_RUN_FILE"
+    fi
+    chmod 600 "$ENV_RUN_FILE"
+}
 
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
@@ -61,7 +92,7 @@ if ! command -v gh &> /dev/null; then
     exit 1
 fi
 
-# Check if GitHub CLI is authenticated
+# Check if GitHub CLI is authenticated (works with both config file and macOS keyring)
 if ! gh auth status &> /dev/null; then
     echo "❌ GitHub CLI is not authenticated."
     echo ""
@@ -69,6 +100,81 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
+# Get token from gh CLI (works with both config file and macOS keyring)
+if ! TOKEN=$(gh auth token 2>/dev/null); then
+    echo "❌ Failed to retrieve GitHub token from GitHub CLI."
+    echo ""
+    echo "   Run: gh auth login"
+    exit 1
+fi
+
+# Verify token scopes using gh auth status
+REQUIRED_SCOPES=("gist" "read:org" "repo")
+MISSING_SCOPES=()
+
+# Get scopes from gh auth status
+AUTH_STATUS=$(gh auth status 2>&1 || true)
+SCOPES_HEADER=$(echo "$AUTH_STATUS" | grep -i "token scopes:" | sed 's/.*token scopes: *//i' | tr -d '\r\n' || echo "")
+
+if [ -z "$SCOPES_HEADER" ]; then
+    echo "❌ Could not verify token scopes from gh auth status."
+    echo ""
+    echo "   Required scopes: ${REQUIRED_SCOPES[*]}"
+    echo ""
+    echo "   Run: gh auth refresh -s gist,read:org,repo"
+    exit 1
+fi
+
+# Normalize scopes: remove spaces and convert to lowercase for comparison
+SCOPES_NORMALIZED=$(echo "$SCOPES_HEADER" | tr ',' ' ' | tr '[:upper:]' '[:lower:]')
+
+# Check each required scope
+for scope in "${REQUIRED_SCOPES[@]}"; do
+    if ! echo "$SCOPES_NORMALIZED" | grep -qw "$scope"; then
+        MISSING_SCOPES+=("$scope")
+    fi
+done
+
+if [ ${#MISSING_SCOPES[@]} -gt 0 ]; then
+    echo "❌ GitHub token is missing required scopes."
+    echo ""
+    echo "   Required scopes: ${REQUIRED_SCOPES[*]}"
+    echo "   Missing scopes: ${MISSING_SCOPES[*]}"
+    echo "   Current scopes: $SCOPES_HEADER"
+    echo ""
+    echo "   Run: gh auth refresh -s gist,read:org,repo"
+    exit 1
+fi
+
+# Write token to .env.run file for the container to use
+set_env_var "GITHUB_TOKEN" "$TOKEN"
+
 echo "✅ GitHub CLI is installed and authenticated."
+if [ -n "$SCOPES_HEADER" ]; then
+    echo "✅ Token scopes verified: $SCOPES_HEADER"
+fi
+echo "✅ Token prepared for container authentication."
+
+# Check for Composer/Packagist authentication
+if command -v composer &> /dev/null; then
+    PACKAGIST_USERNAME=$(composer config --global http-basic.repo.packagist.com.username 2>/dev/null || echo "")
+    PACKAGIST_PASSWORD=$(composer config --global http-basic.repo.packagist.com.password 2>/dev/null || echo "")
+    
+    if [ -n "$PACKAGIST_USERNAME" ] && [ -n "$PACKAGIST_PASSWORD" ]; then
+        set_env_var "PACKAGIST_USERNAME" "$PACKAGIST_USERNAME"
+        set_env_var "PACKAGIST_PASSWORD" "$PACKAGIST_PASSWORD"
+        echo "✅ Packagist credentials prepared for container authentication."
+    fi
+fi
+
+# Check for host .npmrc file and prepare it for container
+HOST_NPMRC="${HOME}/.npmrc"
+NPMRC_SCRIPTS_FILE="$DEVCONTAINER_DIR/scripts/.npmrc.host"
+if [ -f "$HOST_NPMRC" ]; then
+    cp "$HOST_NPMRC" "$NPMRC_SCRIPTS_FILE"
+    chmod 600 "$NPMRC_SCRIPTS_FILE"
+    echo "✅ Host .npmrc file prepared for container import."
+fi
+
 echo "✅ .env file found."
 
