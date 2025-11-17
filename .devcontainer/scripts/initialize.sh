@@ -44,13 +44,10 @@ set_env_var() {
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
     echo "⚠️ .env file not found at $ENV_FILE"
-    echo ""
-    echo "   Copying the example/defaults .env file..."
-    echo ""
+    echo "Copying the example/defaults .env file..."
     cp $ENV_EXAMPLE $ENV_FILE
     echo "✅ .env $ENV_FILE copied from $ENV_EXAMPLE"
     echo ""
-    exit 0
 fi
 
 # Load .env file to get port variables
