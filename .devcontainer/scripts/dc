@@ -208,6 +208,18 @@ dc-clone-repos() {
             fi
             echo ""
         fi
+        
+        # Check for .env file and copy .env.local if needed (for both newly cloned and existing repos)
+        if [ -d "$repo_path" ] && [ -d "$repo_path/.git" ]; then
+            cd "$repo_path"
+            if [ ! -f ".env" ]; then
+                if [ -f ".env.local" ]; then
+                    echo "   📋 Copying .env.local to .env..."
+                    cp ".env.local" ".env"
+                    echo "   ✅ Created .env from .env.local"
+                fi
+            fi
+        fi
     done
     
     # Summary
