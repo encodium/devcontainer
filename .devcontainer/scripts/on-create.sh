@@ -42,6 +42,7 @@ fi
 git config --global 'credential.https://github.com.helper' '!gh auth git-credential' 2>/dev/null || true
 git config --global url."https://github.com/".insteadOf git@github.com: 2>/dev/null || true
 git config --global url."https://".insteadOf git:// 2>/dev/null || true
+git config --global --add safe.directory /workspace
 
 # Configure zsh scrollback
 if [ -f "$HOME/.zshrc" ] && ! grep -q "scrollback" "$HOME/.zshrc"; then

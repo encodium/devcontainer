@@ -238,8 +238,8 @@ dc-clone-repos() {
     elif [ $SUCCESS_COUNT -gt 0 ]; then
         echo "✅ All repositories cloned successfully!"
         echo ""
-        echo "   Next step: Link common repo to other repositories:"
-        echo "      dc link-common"
+        echo -e "   \033[1m\033[36mNext step:\033[0m Link common repo to other repositories if you haven't already:"
+        echo -e "      \033[1m\033[32mdc link-common\033[0m"
     fi
 }
 

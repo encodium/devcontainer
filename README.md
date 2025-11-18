@@ -39,7 +39,10 @@ If you haven't set up WSL2 yet, follow the [official WSL2 installation guide](ht
   
   After installation, authenticate:
   ```bash
+  # No need to create your own PAT/token! Github will create one for you as part of this process
   gh auth login
+  # This will change your git to use the new token and HTTPS under the hood. Should require no
+  # additional changes to your repos or remotes
   gh auth setup-git
   ```
 
