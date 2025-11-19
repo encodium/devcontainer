@@ -3,6 +3,7 @@
 .npmrc.host
 workspace/*
 !workspace/.gitkeep
+!workspace/.vscode/sftp.template.json
 logs/*
 !logs/.gitkeep
 *.log

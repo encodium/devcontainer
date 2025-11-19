@@ -7,6 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVCONTAINER_DIR="$(dirname "$SCRIPT_DIR")"
+WORKSPACE_DIR="$(dirname "$DEVCONTAINER_DIR")/workspace"
 ENV_FILE="$DEVCONTAINER_DIR/.env"
 ENV_EXAMPLE="$DEVCONTAINER_DIR/.env.example"
 ENV_RUN_FILE="$DEVCONTAINER_DIR/.env.run"
@@ -16,11 +17,19 @@ source "$SCRIPT_DIR/functions.sh"
 
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
-    echo "⚠️ .env file not found at $ENV_FILE"
-    echo "Copying the example/defaults .env file..."
+    echo "📋 Copying the example/defaults .env file..."
     cp $ENV_EXAMPLE $ENV_FILE
     echo "✅ .env $ENV_FILE copied from $ENV_EXAMPLE"
     echo ""
+fi
+
+# Copy .env.workspace.example to /workspace/.env if .env doesn't already exist
+WORKSPACE_ENV_FILE="$WORKSPACE_DIR/.env"
+ENV_WORKSPACE_EXAMPLE="$DEVCONTAINER_DIR/.env.workspace.example"
+if [ ! -f "$WORKSPACE_ENV_FILE" ] && [ -f "$ENV_WORKSPACE_EXAMPLE" ]; then
+    echo "📋 Copying .env.workspace.example to /workspace/.env..."
+    cp "$ENV_WORKSPACE_EXAMPLE" "$WORKSPACE_ENV_FILE"
+    echo "✅ Workspace .env file created from example"
 fi
 
 # Load .env file to get port variables

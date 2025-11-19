@@ -66,8 +66,9 @@ RUN echo "xdebug.mode=develop,debug" >> /usr/local/etc/php/conf.d/docker-php-ext
     echo "xdebug.client_port=9003" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 
 # Create vscode user (matches devcontainer features)
+# Use specific UID/GID 1000 to match cache mount settings and prevent ownership issues
 # Set default shell to zsh (common-utils feature would do this, but we're installing it in Dockerfile)
-RUN groupadd -r vscode && useradd -r -g vscode -m -s /usr/bin/zsh vscode && \
+RUN groupadd -r -g 1000 vscode && useradd -r -u 1000 -g vscode -m -s /usr/bin/zsh vscode && \
     mkdir -p /home/vscode/.devcontainer/logs && \
     mkdir -p /home/vscode/.composer && \
     chown -R vscode:vscode /home/vscode
@@ -97,10 +98,10 @@ ENV PATH="${BREW_PREFIX}/bin:${BREW_PREFIX}/sbin:${PATH}"
 ENV HOMEBREW_NO_AUTO_UPDATE=1
 
 # Install Homebrew packages with cache mount
-# Cache mounts create directories with root ownership, so we fix ownership before brew operations
+# Cache mounts create directories with root ownership, so we fix ownership before and after brew operations
+# The Homebrew installer may also change ownership, so we fix it after installation
 RUN --mount=type=cache,target=${BREW_PREFIX}/var/cache,uid=1000,gid=1000 \
     --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
-    sudo chown -R vscode:vscode ${BREW_PREFIX} /home/vscode/.cache && \
     eval "$(${BREW_PREFIX}/bin/brew shellenv)" && \
     brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat just
 

@@ -473,7 +473,6 @@ dc-sftp-generate() {
         echo "Example:"
         echo "   SANDBOX_HOST=your-host.example.com"
         echo "   SANDBOX_USERNAME=your-username"
-        echo "   SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
         echo "   PLAYGROUND_NAME=your-playground"
         return 1
     fi
@@ -481,9 +480,9 @@ dc-sftp-generate() {
     # Template file path - try multiple possible locations
     local template_file=""
     
-    # Try relative to workspace parent (devcontainer repo root)
-    if [ -f "/workspace/../.devcontainer/.vscode/sftp.template.json" ]; then
-        template_file="/workspace/../.devcontainer/.vscode/sftp.template.json"
+    # Try workspace .vscode directory first (new location, available at runtime)
+    if [ -f "/workspace/.vscode/sftp.template.json" ]; then
+        template_file="/workspace/.vscode/sftp.template.json"
     # Try using script directory to find devcontainer root
     elif [ -n "${BASH_SOURCE[0]}" ]; then
         local script_dir
@@ -499,9 +498,7 @@ dc-sftp-generate() {
     if [ -z "$template_file" ] || [ ! -f "$template_file" ]; then
         echo "❌ ERROR: Template file not found"
         echo ""
-        echo "   Expected location: .devcontainer/.vscode/sftp.template.json"
-        echo "   Tried:"
-        echo "     - /workspace/../.devcontainer/.vscode/sftp.template.json"
+        echo "   Expected location: /workspace/.vscode/sftp.template.json"
         if [ -n "${BASH_SOURCE[0]}" ]; then
             local script_dir
             script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -544,39 +541,75 @@ dc-sftp-generate() {
     local template_content
     template_content=$(cat "$template_file")
     
-    # Generate SFTP config for each repo
+    # Create workspace .vscode directory if it doesn't exist
+    local workspace_vscode_dir="/workspace/.vscode"
+    
+    # Generate SFTP config for each repo and collect into array
+    local configs=()
     local success_count=0
     local fail_count=0
     
     for repo in "${repos[@]}"; do
         local repo_name=$(basename "$repo")
-        local vscode_dir="$repo/.vscode"
-        local sftp_file="$vscode_dir/sftp.json"
         
-        echo "📝 Generating SFTP config for $repo_name..."
-        
-        # Create .vscode directory if it doesn't exist
-        if [ ! -d "$vscode_dir" ]; then
-            mkdir -p "$vscode_dir"
-        fi
+        echo "📝 Processing $repo_name..."
         
         # Replace template variables
-        local output="$template_content"
-        output=$(echo "$output" | sed "s|{{REPO_NAME}}|$repo_name|g")
-        output=$(echo "$output" | sed "s|{{SANDBOX_HOST}}|$SANDBOX_HOST|g")
-        output=$(echo "$output" | sed "s|{{SANDBOX_USERNAME}}|$SANDBOX_USERNAME|g")
-        output=$(echo "$output" | sed "s|{{PLAYGROUND_NAME}}|$PLAYGROUND_NAME|g")
+        local config="$template_content"
+        config=$(echo "$config" | sed "s|{{REPO_NAME}}|$repo_name|g")
+        config=$(echo "$config" | sed "s|{{SANDBOX_HOST}}|$SANDBOX_HOST|g")
+        config=$(echo "$config" | sed "s|{{SANDBOX_USERNAME}}|$SANDBOX_USERNAME|g")
+        config=$(echo "$config" | sed "s|{{PLAYGROUND_NAME}}|$PLAYGROUND_NAME|g")
         
-        # Write to file
-        if echo "$output" > "$sftp_file"; then
-            echo "✅ Created $sftp_file"
-            success_count=$((success_count + 1))
+        # Add to configs array
+        configs+=("$config")
+        success_count=$((success_count + 1))
+    done
+    
+    # Combine all configs into a JSON array
+    local sftp_file="$workspace_vscode_dir/sftp.json"
+    echo "📝 Generating combined SFTP config at $sftp_file..."
+    
+    # Build JSON array by joining configs with commas
+    # Use a temporary file to build the JSON array properly
+    local temp_file
+    temp_file=$(mktemp)
+    
+    # Start with opening bracket
+    echo "[" > "$temp_file"
+    
+    # Add each config with proper comma separation
+    local first=true
+    for config in "${configs[@]}"; do
+        if [ "$first" = true ]; then
+            first=false
+        else
+            echo "," >> "$temp_file"
+        fi
+        # Add config (each config should be a valid JSON object)
+        echo "$config" >> "$temp_file"
+    done
+    
+    # Close with closing bracket
+    echo "]" >> "$temp_file"
+    
+    # Format JSON with jq and write to final file
+    if jq . "$temp_file" > "$sftp_file" 2>/dev/null; then
+        echo "✅ Created $sftp_file with ${#configs[@]} configuration(s)"
+        rm -f "$temp_file"
+    else
+        echo "❌ Failed to create or format $sftp_file"
+        echo "⚠️  Attempting to write unformatted JSON..."
+        if mv "$temp_file" "$sftp_file"; then
+            echo "✅ Created $sftp_file (unformatted) with ${#configs[@]} configuration(s)"
         else
             echo "❌ Failed to create $sftp_file"
+            rm -f "$temp_file"
             fail_count=$((fail_count + 1))
+            return 1
         fi
-        echo ""
-    done
+    fi
+    echo ""
     
     # Summary
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -590,7 +623,7 @@ dc-sftp-generate() {
         echo "⚠️  Some configurations failed to generate. Check the errors above."
         return 1
     elif [ $success_count -gt 0 ]; then
-        echo "✅ All SFTP configurations generated successfully!"
+        echo "✅ All SFTP configurations generated successfully in $sftp_file!"
     fi
 }
 

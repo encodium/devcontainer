@@ -86,6 +86,23 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
         echo "   - $warning"
     done
     echo ""
-    echo "   Services may still be starting. Run 'dc test-env' to check connectivity."
-    echo ""
 fi
+
+# Display next steps
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📋 Quick Start"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Test environment connectivity:"
+echo "  dc test-env"
+echo ""
+echo "Clone repositories:"
+echo "  dc clone-repos batch,common,webstore"
+echo ""
+echo "Link with common repository:"
+echo "  dc link-common"
+echo ""
+echo "Verify with tests:"
+echo "  cd /workspace/common && composer run test:src:feature"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

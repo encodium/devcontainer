@@ -75,8 +75,28 @@ if command -v fnm &> /dev/null; then
     fi
 fi
 
-# Fix ownership for Homebrew directories, installer gives uid/gid of 999 at this time
-sudo chown -R vscode:vscode /home/linuxbrew /home/vscode/.cache
+# Fix ownership for Homebrew directories
+# Check UID/GID instead of username since cache mounts may create files with unmapped UIDs
+# Only run chown if ownership is incorrect to avoid slow recursive operations
+VSCODE_UID=$(id -u vscode 2>/dev/null || echo "")
+VSCODE_GID=$(id -g vscode 2>/dev/null || echo "")
+
+if [ -n "$VSCODE_UID" ] && [ -n "$VSCODE_GID" ]; then
+    if [ -d "/home/linuxbrew" ]; then
+        DIR_UID=$(stat -c "%u" /home/linuxbrew 2>/dev/null || stat -f "%u" /home/linuxbrew 2>/dev/null || echo "")
+        DIR_GID=$(stat -c "%g" /home/linuxbrew 2>/dev/null || stat -f "%g" /home/linuxbrew 2>/dev/null || echo "")
+        if [ "$DIR_UID" != "$VSCODE_UID" ] || [ "$DIR_GID" != "$VSCODE_GID" ]; then
+            sudo chown -R vscode:vscode /home/linuxbrew
+        fi
+    fi
+    if [ -d "/home/vscode/.cache" ]; then
+        DIR_UID=$(stat -c "%u" /home/vscode/.cache 2>/dev/null || stat -f "%u" /home/vscode/.cache 2>/dev/null || echo "")
+        DIR_GID=$(stat -c "%g" /home/vscode/.cache 2>/dev/null || stat -f "%g" /home/vscode/.cache 2>/dev/null || echo "")
+        if [ "$DIR_UID" != "$VSCODE_UID" ] || [ "$DIR_GID" != "$VSCODE_GID" ]; then
+            sudo chown -R vscode:vscode /home/vscode/.cache
+        fi
+    fi
+fi
 
 # Symlink PHP to standard location for compatibility. Batch uses this path in its shebang
 if [ ! -L /usr/bin/php ] || [ "$(readlink -f /usr/bin/php)" != "/usr/local/bin/php" ]; then
@@ -108,18 +128,31 @@ COMPOSER_AUTH_FILE="$COMPOSER_AUTH_DIR/auth.json"
 COMPOSER_AUTH_VALID=false
 
 if [ -n "$PACKAGIST_USERNAME" ] && [ -n "$PACKAGIST_PASSWORD" ]; then
-    echo "🔐 Configuring Composer Packagist authentication..."
-    if composer config --global --auth http-basic.repo.packagist.com "$PACKAGIST_USERNAME" "$PACKAGIST_PASSWORD" 2>/dev/null; then
-        if grep -q "repo.packagist.com" "$COMPOSER_AUTH_FILE" 2>/dev/null; then
-            COMPOSER_AUTH_VALID=true
-            echo "✅ Composer Packagist authentication configured successfully"
+    # Check if auth is already configured correctly to avoid slow composer config operations
+    NEEDS_PACKAGIST_CONFIG=true
+    if [ -f "$COMPOSER_AUTH_FILE" ]; then
+        EXISTING_USERNAME=$(composer config --global http-basic.repo.packagist.com.username 2>/dev/null || echo "")
+        if [ "$EXISTING_USERNAME" = "$PACKAGIST_USERNAME" ]; then
+            NEEDS_PACKAGIST_CONFIG=false
+        fi
+    fi
+    
+    if [ "$NEEDS_PACKAGIST_CONFIG" = true ]; then
+        echo "🔐 Configuring Composer Packagist authentication..."
+        if composer config --global --auth http-basic.repo.packagist.com "$PACKAGIST_USERNAME" "$PACKAGIST_PASSWORD" 2>/dev/null; then
+            if grep -q "repo.packagist.com" "$COMPOSER_AUTH_FILE" 2>/dev/null; then
+                COMPOSER_AUTH_VALID=true
+                echo "✅ Composer Packagist authentication configured successfully"
+            else
+                WARNINGS+=("Composer Packagist auth configuration completed but verification failed")
+                MISSING_AUTH+=("packagist")
+            fi
         else
-            WARNINGS+=("Composer Packagist auth configuration completed but verification failed")
+            WARNINGS+=("Failed to configure Composer Packagist authentication")
             MISSING_AUTH+=("packagist")
         fi
     else
-        WARNINGS+=("Failed to configure Composer Packagist authentication")
-        MISSING_AUTH+=("packagist")
+        COMPOSER_AUTH_VALID=true
     fi
 fi
 
@@ -139,10 +172,13 @@ NPMRC_HOST_FILE="$HOME/.devcontainer/scripts/.npmrc.host"
 NPM_AUTH_VALID=false
 
 if [ -f "$NPMRC_HOST_FILE" ]; then
-    echo "📦 Importing .npmrc from host..."
-    cp "$NPMRC_HOST_FILE" "$NPMRC_FILE"
-    chmod 600 "$NPMRC_FILE"
-    echo "✅ Host .npmrc imported to container"
+    # Only copy if files differ to avoid unnecessary file operations
+    if [ ! -f "$NPMRC_FILE" ] || ! cmp -s "$NPMRC_HOST_FILE" "$NPMRC_FILE" 2>/dev/null; then
+        echo "📦 Importing .npmrc from host..."
+        cp "$NPMRC_HOST_FILE" "$NPMRC_FILE"
+        chmod 600 "$NPMRC_FILE"
+        echo "✅ Host .npmrc imported to container"
+    fi
 fi
 
 # Check npm authentication
