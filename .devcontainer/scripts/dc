@@ -445,12 +445,28 @@ dc-test-env() {
 }
 
 # Generate SFTP configuration files for all workspace repositories
+# Usage: dc sftp-generate [playground-name]
+#   playground-name: Optional override for PLAYGROUND_NAME environment variable
 dc-sftp-generate() {
+    # Check for optional playground name parameter
+    local playground_name_override="${1:-}"
+    local playground_name
+    
+    # Use override if provided, otherwise use environment variable
+    if [ -n "$playground_name_override" ]; then
+        playground_name="$playground_name_override"
+    else
+        playground_name="${PLAYGROUND_NAME:-}"
+    fi
+    
     echo "📤 Generating SFTP configuration files..."
+    if [ -n "$playground_name_override" ]; then
+        echo "   Using playground name: $playground_name (override)"
+    fi
     echo ""
     
-    # Required environment variables
-    local required_vars=("SANDBOX_HOST" "SANDBOX_USERNAME" "SSH_AUTH_SOCK" "PLAYGROUND_NAME")
+    # Required environment variables (PLAYGROUND_NAME can come from parameter or env)
+    local required_vars=("SANDBOX_HOST" "SANDBOX_USERNAME" "SSH_AUTH_SOCK")
     local missing_vars=()
     
     # Check each required variable
@@ -459,6 +475,11 @@ dc-sftp-generate() {
             missing_vars+=("$var")
         fi
     done
+    
+    # Check playground name separately (can come from parameter or env)
+    if [ -z "$playground_name" ]; then
+        missing_vars+=("PLAYGROUND_NAME")
+    fi
     
     # If any variables are missing, report and exit
     if [ ${#missing_vars[@]} -gt 0 ]; then
@@ -469,11 +490,15 @@ dc-sftp-generate() {
         done
         echo ""
         echo "Please add these variables to your .env file in the devcontainer and re-run the command."
+        echo "Or provide PLAYGROUND_NAME as a parameter: dc sftp-generate <playground-name>"
         echo ""
         echo "Example:"
         echo "   SANDBOX_HOST=your-host.example.com"
         echo "   SANDBOX_USERNAME=your-username"
         echo "   PLAYGROUND_NAME=your-playground"
+        echo ""
+        echo "Or:"
+        echo "   dc sftp-generate your-playground"
         return 1
     fi
     
@@ -559,7 +584,7 @@ dc-sftp-generate() {
         config=$(echo "$config" | sed "s|{{REPO_NAME}}|$repo_name|g")
         config=$(echo "$config" | sed "s|{{SANDBOX_HOST}}|$SANDBOX_HOST|g")
         config=$(echo "$config" | sed "s|{{SANDBOX_USERNAME}}|$SANDBOX_USERNAME|g")
-        config=$(echo "$config" | sed "s|{{PLAYGROUND_NAME}}|$PLAYGROUND_NAME|g")
+        config=$(echo "$config" | sed "s|{{PLAYGROUND_NAME}}|$playground_name|g")
         
         # Add to configs array
         configs+=("$config")
@@ -639,7 +664,8 @@ dc-help() {
     echo "Repository Management:"
     echo "  dc clone-repos [repos]  - Clone repositories (e.g., dc clone-repos batch,common)"
     echo "  dc link-common          - Link common repo to all workspace repositories"
-    echo "  dc sftp-generate        - Generate SFTP configuration files for all workspace repositories"
+    echo "  dc sftp-generate [playground] - Generate SFTP configuration files for all workspace repositories"
+    echo "                                    Optional: override PLAYGROUND_NAME with parameter"
     echo ""
     echo "Authentication Setup:"
     echo "  dc packagist-auth       - Check and configure Private Packagist authentication"
@@ -731,7 +757,8 @@ main() {
             dc-test-env
             ;;
         sftp-generate)
-            dc-sftp-generate
+            shift
+            dc-sftp-generate "$@"
             ;;
         help|--help|-h)
             dc-help
