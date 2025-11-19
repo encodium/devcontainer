@@ -444,6 +444,156 @@ dc-test-env() {
     fi
 }
 
+# Generate SFTP configuration files for all workspace repositories
+dc-sftp-generate() {
+    echo "📤 Generating SFTP configuration files..."
+    echo ""
+    
+    # Required environment variables
+    local required_vars=("SANDBOX_HOST" "SANDBOX_USERNAME" "SSH_AUTH_SOCK" "PLAYGROUND_NAME")
+    local missing_vars=()
+    
+    # Check each required variable
+    for var in "${required_vars[@]}"; do
+        if [ -z "${!var:-}" ]; then
+            missing_vars+=("$var")
+        fi
+    done
+    
+    # If any variables are missing, report and exit
+    if [ ${#missing_vars[@]} -gt 0 ]; then
+        echo "❌ ERROR: Missing required environment variables:"
+        echo ""
+        for var in "${missing_vars[@]}"; do
+            echo "   - $var"
+        done
+        echo ""
+        echo "Please add these variables to your .env file in the devcontainer and re-run the command."
+        echo ""
+        echo "Example:"
+        echo "   SANDBOX_HOST=your-host.example.com"
+        echo "   SANDBOX_USERNAME=your-username"
+        echo "   SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
+        echo "   PLAYGROUND_NAME=your-playground"
+        return 1
+    fi
+    
+    # Template file path - try multiple possible locations
+    local template_file=""
+    
+    # Try relative to workspace parent (devcontainer repo root)
+    if [ -f "/workspace/../.devcontainer/.vscode/sftp.template.json" ]; then
+        template_file="/workspace/../.devcontainer/.vscode/sftp.template.json"
+    # Try using script directory to find devcontainer root
+    elif [ -n "${BASH_SOURCE[0]}" ]; then
+        local script_dir
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        local devcontainer_dir
+        devcontainer_dir="$(dirname "$script_dir")"
+        if [ -f "$devcontainer_dir/.vscode/sftp.template.json" ]; then
+            template_file="$devcontainer_dir/.vscode/sftp.template.json"
+        fi
+    fi
+    
+    # Check if template exists
+    if [ -z "$template_file" ] || [ ! -f "$template_file" ]; then
+        echo "❌ ERROR: Template file not found"
+        echo ""
+        echo "   Expected location: .devcontainer/.vscode/sftp.template.json"
+        echo "   Tried:"
+        echo "     - /workspace/../.devcontainer/.vscode/sftp.template.json"
+        if [ -n "${BASH_SOURCE[0]}" ]; then
+            local script_dir
+            script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            local devcontainer_dir
+            devcontainer_dir="$(dirname "$script_dir")"
+            echo "     - $devcontainer_dir/.vscode/sftp.template.json"
+        fi
+        return 1
+    fi
+    
+    # Check if workspace directory exists
+    if [ ! -d "/workspace" ]; then
+        echo "❌ ERROR: /workspace directory not found"
+        return 1
+    fi
+    
+    # Find all git repositories in /workspace
+    local repos=()
+    for dir in /workspace/*; do
+        if [ -d "$dir" ] && [ -d "$dir/.git" ]; then
+            repos+=("$dir")
+        fi
+    done
+    
+    if [ ${#repos[@]} -eq 0 ]; then
+        echo "⚠️  No git repositories found in /workspace"
+        echo ""
+        echo "   Clone some repositories first:"
+        echo "      dc clone-repos batch,common"
+        return 0
+    fi
+    
+    echo "Found ${#repos[@]} repository/repositories:"
+    for repo in "${repos[@]}"; do
+        echo "  - $(basename "$repo")"
+    done
+    echo ""
+    
+    # Read template content
+    local template_content
+    template_content=$(cat "$template_file")
+    
+    # Generate SFTP config for each repo
+    local success_count=0
+    local fail_count=0
+    
+    for repo in "${repos[@]}"; do
+        local repo_name=$(basename "$repo")
+        local vscode_dir="$repo/.vscode"
+        local sftp_file="$vscode_dir/sftp.json"
+        
+        echo "📝 Generating SFTP config for $repo_name..."
+        
+        # Create .vscode directory if it doesn't exist
+        if [ ! -d "$vscode_dir" ]; then
+            mkdir -p "$vscode_dir"
+        fi
+        
+        # Replace template variables
+        local output="$template_content"
+        output=$(echo "$output" | sed "s|{{REPO_NAME}}|$repo_name|g")
+        output=$(echo "$output" | sed "s|{{SANDBOX_HOST}}|$SANDBOX_HOST|g")
+        output=$(echo "$output" | sed "s|{{SANDBOX_USERNAME}}|$SANDBOX_USERNAME|g")
+        output=$(echo "$output" | sed "s|{{PLAYGROUND_NAME}}|$PLAYGROUND_NAME|g")
+        
+        # Write to file
+        if echo "$output" > "$sftp_file"; then
+            echo "✅ Created $sftp_file"
+            success_count=$((success_count + 1))
+        else
+            echo "❌ Failed to create $sftp_file"
+            fail_count=$((fail_count + 1))
+        fi
+        echo ""
+    done
+    
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📊 Generation Summary"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   Successfully generated: $success_count"
+    echo "   Failed: $fail_count"
+    echo ""
+    
+    if [ $fail_count -gt 0 ]; then
+        echo "⚠️  Some configurations failed to generate. Check the errors above."
+        return 1
+    elif [ $success_count -gt 0 ]; then
+        echo "✅ All SFTP configurations generated successfully!"
+    fi
+}
+
 # Display help/quick reference
 dc-help() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -456,6 +606,7 @@ dc-help() {
     echo "Repository Management:"
     echo "  dc clone-repos [repos]  - Clone repositories (e.g., dc clone-repos batch,common)"
     echo "  dc link-common          - Link common repo to all workspace repositories"
+    echo "  dc sftp-generate        - Generate SFTP configuration files for all workspace repositories"
     echo ""
     echo "Authentication Setup:"
     echo "  dc packagist-auth       - Check and configure Private Packagist authentication"
@@ -545,6 +696,9 @@ main() {
             ;;
         test-env)
             dc-test-env
+            ;;
+        sftp-generate)
+            dc-sftp-generate
             ;;
         help|--help|-h)
             dc-help
