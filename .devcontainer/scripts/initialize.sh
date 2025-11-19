@@ -74,30 +74,14 @@ if ! retry_with_backoff "gh auth status" 5 5; then
     exit 1
 fi
 
-# Get token from gh CLI with retries (works with both config file and macOS keyring)
-# Retry up to 5 times over 5 seconds
-TOKEN=""
-if ! retry_with_backoff "gh auth token" 5 5 "TOKEN"; then
-    echo "❌ Failed to retrieve GitHub token from GitHub CLI."
-    echo ""
-    echo "   This can happen after system suspend or on first launch."
-    echo "   The credential store may not be accessible yet."
-    echo ""
-    echo "   Run: gh auth login"
-    exit 1
-fi
+TOKEN="$(gh auth token)"
 
 # Verify token scopes using gh auth status
 REQUIRED_SCOPES=("gist" "read:org" "repo")
 MISSING_SCOPES=()
 
 # Get scopes from gh auth status (with retries)
-AUTH_STATUS=""
-SCOPES_HEADER=""
-if retry_with_backoff "gh auth status" 5 5; then
-    AUTH_STATUS=$(gh auth status 2>&1 || true)
-    SCOPES_HEADER=$(echo "$AUTH_STATUS" | grep -i "token scopes:" | sed 's/.*token scopes: *//i' | tr -d '\r\n' || echo "")
-fi
+SCOPES_HEADER="$(gh auth status | grep -i "token scopes:" | sed 's/.*token scopes: *//i' | tr -d '\r\n' || echo "")"
 
 if [ -z "$SCOPES_HEADER" ]; then
     echo "❌ Could not verify token scopes from gh auth status."
