@@ -83,7 +83,15 @@ if ! retry_with_backoff "gh auth status" 5 5; then
     exit 1
 fi
 
-TOKEN="$(gh auth token)"
+# Fetch token with retries (handles suspend/first launch scenarios)
+if ! retry_with_backoff "gh auth token" 5 5 TOKEN; then
+    echo "❌ Failed to retrieve GitHub token."
+    echo ""
+    echo "   This can happen after system suspend or on first launch."
+    echo ""
+    echo "   Us the 'reload window' command to try starting the container again"
+    exit 1
+fi
 
 # Verify token scopes using gh auth status
 REQUIRED_SCOPES=("gist" "read:org" "repo")

@@ -4,6 +4,7 @@
 workspace/*
 !workspace/.gitkeep
 !workspace/.vscode/sftp.template.json
+!workspace/.vscode/launch.json
 logs/*
 !logs/.gitkeep
 *.log

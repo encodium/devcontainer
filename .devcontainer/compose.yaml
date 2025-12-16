@@ -39,6 +39,8 @@ services:
       - "${MYSQL_EXTERNAL_PORT:-3306}:${MYSQL_PORT:-3306}"
     env_file:
       - .env
+    command:
+      - --sql_mode=0
     networks:
       - rp
     volumes:

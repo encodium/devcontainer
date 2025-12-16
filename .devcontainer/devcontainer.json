@@ -1,5 +1,4 @@
 {
-  "name": "Local Development",
   "dockerComposeFile": "compose.yaml",
   "service": "shell",
   "workspaceFolder": "/workspace",
@@ -19,8 +18,7 @@
     "source=${localWorkspaceFolder}/logs,target=/home/vscode/.devcontainer/logs,type=bind,consistency=cached"
   ],
   "containerEnv": {
-    "USERNAME": "vscode",
-    "XDEBUG_CONFIG": "client_host=host.docker.internal log=/home/vscode/.devcontainer/logs/xdebug.log"
+    "USERNAME": "vscode"
   },
   "customizations": {
     "vscode": {
@@ -28,7 +26,8 @@
         "xdebug.php-debug",
         "eamodio.gitlens",
         "bmewburn.vscode-intelephense-client",
-        "Natizyskunk.sftp"
+        "Natizyskunk.sftp",
+        "Ariga.atlas-hcl"
       ],
       "settings": {
         "php.validate.executablePath": "/usr/local/bin/php",

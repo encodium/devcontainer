@@ -63,7 +63,8 @@ RUN echo "memory_limit = 512M" > /usr/local/etc/php/conf.d/development.ini && \
 RUN echo "xdebug.mode=develop,debug" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && \
     echo "xdebug.start_with_request=yes" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && \
     echo "xdebug.client_host=host.docker.internal" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && \
-    echo "xdebug.client_port=9003" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+    echo "xdebug.client_port=9003" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && \
+    echo "xdebug.idekey=VSCODE" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 
 # Create vscode user (matches devcontainer features)
 # Use specific UID/GID 1000 to match cache mount settings and prevent ownership issues
@@ -103,7 +104,7 @@ ENV HOMEBREW_NO_AUTO_UPDATE=1
 RUN --mount=type=cache,target=${BREW_PREFIX}/var/cache,uid=1000,gid=1000 \
     --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
     eval "$(${BREW_PREFIX}/bin/brew shellenv)" && \
-    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat just
+    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat just ariga/tap/atlas tfenv
 
 # Install composer-link plugin globally
 RUN composer global config --no-plugins allow-plugins.sandersander/composer-link true && \
