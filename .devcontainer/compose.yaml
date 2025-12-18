@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: sleep infinity
+    command: /bin/sh -c "while sleep 1000; do :; done"
     env_file:
       - .env
       - .env.run
