@@ -240,14 +240,7 @@ Xdebug is pre-configured for VS Code/Cursor. The debugger listens on port 9003.
 
 ### PHPStorm
 
-1. Go to `File > Settings > Languages & Frameworks > PHP > Debug`
-2. Set `xdebug.client_host` to `host.docker.internal` (or your host IP)
-3. Set port to `9003`
-4. Configure server mapping:
-   - Name: `devcontainer`
-   - Host: `localhost`
-   - Port: `80`
-   - Path mappings: `/workspace` → your local workspace path
+TBD
 
 ## Troubleshooting
 

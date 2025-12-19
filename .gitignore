@@ -5,6 +5,8 @@ workspace/*
 !workspace/.gitkeep
 !workspace/.vscode/sftp.template.json
 !workspace/.vscode/launch.json
+!workspace/.vscode/mcp.json
+!workspace/.cursor/mcp.json
 logs/*
 !logs/.gitkeep
 *.log

@@ -652,6 +652,320 @@ dc-sftp-generate() {
     fi
 }
 
+# Run atlas migrations for all environments
+# Parallelizes cdata_tenants_* to simulate production behavior
+# Usage: dc-schema-upgrade [--skip-tenants]
+dc-schema-upgrade() {
+    local skip_tenants=false
+    if [ "${1:-}" = "--skip-tenants" ]; then
+        skip_tenants=true
+    fi
+    
+    echo "🔄 Running schema migrations..."
+    echo ""
+    
+    local failed=0
+    
+    # Sequential migrations for non-tenant databases
+    local sequential_envs=("batch" "catalog" "cdata_master" "corporate" "customer" "feed" "zippy")
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Running sequential migrations..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    for env in "${sequential_envs[@]}"; do
+        echo -n "  $env: "
+        if atlas migrate apply --env "$env" &>/dev/null; then
+            echo "✅"
+        else
+            echo "❌"
+            failed=$((failed + 1))
+        fi
+    done
+    echo ""
+    
+    # Parallel migrations for tenant databases (simulates production)
+    if [ "$skip_tenants" = true ]; then
+        echo "⏭️  Skipping tenant migrations"
+        echo ""
+    else
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Running tenant migrations in parallel..."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        local pids=()
+        local tenant_results=()
+        
+        for i in {0..9}; do
+            atlas migrate apply --env "cdata_tenants_$i" &>/dev/null &
+            pids+=($!)
+            tenant_results[$i]=""
+        done
+        
+        # Wait for all parallel jobs and capture results
+        for i in {0..9}; do
+            if wait "${pids[$i]}"; then
+                tenant_results[$i]="✅"
+            else
+                tenant_results[$i]="❌"
+                failed=$((failed + 1))
+            fi
+        done
+        
+        # Display results
+        for i in {0..9}; do
+            echo "  cdata_tenants_$i: ${tenant_results[$i]}"
+        done
+        echo ""
+    fi
+    
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ $failed -eq 0 ]; then
+        echo "✅ All migrations completed successfully!"
+    else
+        echo "⚠️  $failed migration(s) failed. Run with verbose output to debug:"
+        echo "   atlas migrate apply --env <env_name>"
+    fi
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    return $failed
+}
+
+# Bootstrap a clean database: create databases, run migrations, seed data
+# Usage: dc-schema-bootstrap [--skip-tenants]
+dc-schema-bootstrap() {
+    local skip_tenants_flag=""
+    if [ "${1:-}" = "--skip-tenants" ]; then
+        skip_tenants_flag="--skip-tenants"
+    fi
+    
+    echo "🗄️  Bootstrapping database from scratch..."
+    echo ""
+    
+    local schema_path="/workspace/schema/common"
+    
+    # Validate required files exist
+    if [ ! -f "$schema_path/create_databases.sql" ]; then
+        echo "❌ ERROR: $schema_path/create_databases.sql not found"
+        return 1
+    fi
+    
+    if [ ! -f "$schema_path/bootstrap.sql" ]; then
+        echo "❌ ERROR: $schema_path/bootstrap.sql not found"
+        return 1
+    fi
+    
+    # Step 1: Create databases
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "1. Creating databases..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    if MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" < "$schema_path/create_databases.sql"; then
+        echo "✅ Databases created"
+    else
+        echo "❌ Failed to create databases"
+        return 1
+    fi
+    echo ""
+    
+    # Step 2: Run migrations
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "2. Running migrations..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    if ! dc-schema-upgrade $skip_tenants_flag; then
+        echo "❌ Migrations failed"
+        return 1
+    fi
+    echo ""
+    
+    # Step 3: Bootstrap data
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "3. Bootstrapping data..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    if MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" < "$schema_path/bootstrap.sql"; then
+        echo "✅ Bootstrap data loaded"
+    else
+        echo "❌ Failed to load bootstrap data"
+        return 1
+    fi
+    echo ""
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✅ Database bootstrap complete!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Drop all databases managed by atlas and re-run bootstrap
+# Hardcoded to docker-compose "mysql" service for safety
+dc-schema-refresh() {
+    # Fixed databases to drop
+    local fixed_databases=("batch" "catalog" "cdata_master" "corporate" "customer" "feed" "zippy")
+    
+    # Find tenant databases (cd* excluding cdata_master)
+    local tenant_databases
+    tenant_databases=$(MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h mysql -P 3306 -u "${MYSQL_USER}" -N -e "SHOW DATABASES LIKE 'cd%';" 2>/dev/null | grep -v '^cdata_master$' || true)
+    
+    echo "⚠️  WARNING: This will DROP ALL databases managed by atlas!"
+    echo ""
+    echo "The following databases will be PERMANENTLY DELETED:"
+    echo "  - batch"
+    echo "  - catalog"
+    echo "  - cdata_master"
+    echo "  - corporate"
+    echo "  - customer"
+    echo "  - feed"
+    echo "  - zippy"
+    if [ -n "$tenant_databases" ]; then
+        local tenant_count
+        tenant_count=$(echo "$tenant_databases" | wc -l | tr -d ' ')
+        echo "  - $tenant_count tenant database(s) matching cd*"
+    fi
+    echo ""
+    echo -n "Type 'yes' to confirm: "
+    read -r confirmation
+    
+    if [ "$confirmation" != "yes" ]; then
+        echo "❌ Aborted."
+        return 1
+    fi
+    
+    echo ""
+    echo "🗑️  Dropping databases..."
+    echo ""
+    
+    local failed=0
+    
+    # Drop fixed databases
+    for db in "${fixed_databases[@]}"; do
+        echo -n "  Dropping $db: "
+        if MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h mysql -P 3306 -u "${MYSQL_USER}" -e "DROP DATABASE IF EXISTS \`$db\`;" 2>/dev/null; then
+            echo "✅"
+        else
+            echo "❌"
+            failed=$((failed + 1))
+        fi
+    done
+    
+    # Drop tenant databases
+    if [ -n "$tenant_databases" ]; then
+        while IFS= read -r db; do
+            echo -n "  Dropping $db: "
+            if MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h mysql -P 3306 -u "${MYSQL_USER}" -e "DROP DATABASE IF EXISTS \`$db\`;" 2>/dev/null; then
+                echo "✅"
+            else
+                echo "❌"
+                failed=$((failed + 1))
+            fi
+        done <<< "$tenant_databases"
+    fi
+    
+    if [ $failed -gt 0 ]; then
+        echo ""
+        echo "⚠️  Some databases failed to drop. Continuing with bootstrap..."
+    fi
+    
+    echo ""
+    echo "🔄 Running bootstrap..."
+    echo ""
+    
+    dc-schema-bootstrap --skip-tenants
+}
+
+# Initialize database for feature testing
+dc-schema-init-feature-testing() {
+    local sql_file="/workspace/common/scripts/init-test-db.sql"
+    
+    echo "🧪 Initializing database for feature testing..."
+    echo ""
+    
+    if [ ! -f "$sql_file" ]; then
+        echo "❌ ERROR: $sql_file not found"
+        return 1
+    fi
+    
+    if MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" < "$sql_file"; then
+        echo "✅ Feature testing database initialized"
+    else
+        echo "❌ Failed to initialize feature testing database"
+        return 1
+    fi
+}
+
+# Schema command dispatcher
+dc-schema() {
+    local subcommand="${1:-}"
+    
+    case "$subcommand" in
+        bootstrap)
+            dc-schema-bootstrap
+            ;;
+        init-feature-testing)
+            dc-schema-init-feature-testing
+            ;;
+        refresh)
+            dc-schema-refresh
+            ;;
+        upgrade)
+            dc-schema-upgrade
+            ;;
+        *)
+            echo "Usage: dc schema <command>"
+            echo ""
+            echo "Commands:"
+            echo "  bootstrap             - Create databases, run migrations, and seed data"
+            echo "  init-feature-testing  - Import test database scaffolding for feature testing"
+            echo "  refresh               - Drop all databases and re-run bootstrap (destructive)"
+            echo "  upgrade               - Run atlas migrations (parallelizes tenant databases)"
+            return 1
+            ;;
+    esac
+}
+
+# Clear all data from Redis
+# Hardcoded to docker-compose "redis" service for safety
+dc-redis-clear() {
+    echo "⚠️  WARNING: This will DELETE ALL data stored in Redis!"
+    echo ""
+    echo -n "Type 'yes' to confirm: "
+    read -r confirmation
+    
+    if [ "$confirmation" != "yes" ]; then
+        echo "❌ Aborted."
+        return 1
+    fi
+    
+    echo ""
+    echo "🗑️  Clearing Redis data..."
+    
+    if redis-cli -h redis -p 6379 FLUSHALL &>/dev/null; then
+        echo "✅ Redis data cleared"
+    else
+        echo "❌ Failed to clear Redis data"
+        return 1
+    fi
+}
+
+# Redis command dispatcher
+dc-redis() {
+    local subcommand="${1:-}"
+    
+    case "$subcommand" in
+        clear)
+            dc-redis-clear
+            ;;
+        *)
+            echo "Usage: dc redis <command>"
+            echo ""
+            echo "Commands:"
+            echo "  clear  - Delete all data from Redis (destructive)"
+            return 1
+            ;;
+    esac
+}
+
 # Display help/quick reference
 dc-help() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -671,6 +985,15 @@ dc-help() {
     echo "  dc packagist-auth       - Check and configure Private Packagist authentication"
     echo "  dc npmrc                - Check and configure npm authentication using GitHub token"
     echo "  dc github-cli           - Check GitHub CLI authentication status"
+    echo ""
+    echo "Schema Management:"
+    echo "  dc schema bootstrap             - Create databases, run migrations, and seed data"
+    echo "  dc schema init-feature-testing  - Import test database scaffolding for feature testing"
+    echo "  dc schema refresh               - Drop all databases and re-run bootstrap (destructive)"
+    echo "  dc schema upgrade               - Run atlas migrations (parallelizes tenant databases)"
+    echo ""
+    echo "Redis Management:"
+    echo "  dc redis clear          - Delete all data from Redis (destructive)"
     echo ""
     echo "Environment Testing:"
     echo "  dc test-env             - Test connectivity to services and CLI authentication"
@@ -759,6 +1082,14 @@ main() {
         sftp-generate)
             shift
             dc-sftp-generate "$@"
+            ;;
+        schema)
+            shift
+            dc-schema "$@"
+            ;;
+        redis)
+            shift
+            dc-redis "$@"
             ;;
         help|--help|-h)
             dc-help

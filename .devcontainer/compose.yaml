@@ -40,6 +40,7 @@ services:
     env_file:
       - .env
     command:
+      # Disable strict mode to match production Aurora MySQL defaults
       - --sql_mode=0
     networks:
       - rp
