@@ -101,7 +101,7 @@ ENV HOMEBREW_NO_AUTO_UPDATE=1
 RUN --mount=type=cache,target=${BREW_PREFIX}/var/cache,uid=1000,gid=1000 \
     --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
     eval "$(${BREW_PREFIX}/bin/brew shellenv)" && \
-    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat just ariga/tap/atlas tfenv
+    brew install kubectl helm vault-cli mysql-client redis fnm gh awscli fzf bind netcat just ariga/tap/atlas tfenv uv jq
 
 # Install composer-link plugin globally
 RUN composer global config --no-plugins allow-plugins.sandersander/composer-link true && \

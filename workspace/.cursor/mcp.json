@@ -1,12 +1,32 @@
 {
   "mcpServers": {
     "github": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/"
+      "command": "/workspace/.cursor/scripts/github-mcp.sh",
+      "args": []
     },
     "jira": {
       "type": "http",
       "url": "https://mcp.atlassian.com/v1/sse"
+    },
+    "mysql": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@benborla29/mcp-server-mysql@2.0.3"
+      ],
+      "env": {
+        "ALLOW_DELETE_OPERATION": "false",
+        "ALLOW_INSERT_OPERATION": "false",
+        "ALLOW_UPDATE_OPERATION": "false",
+        "MYSQL_DB": "",
+        "MYSQL_HOST": "mysql",
+        "MYSQL_PASS": "test",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "test",
+        "ENABLE_LOGGING": "false",
+        "MYSQL_LOG_LEVEL": "error",
+        "MYSQL_ENABLE_LOGGING": "false"
+      }
     }
   }
 }

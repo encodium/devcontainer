@@ -73,6 +73,15 @@ if command -v fnm &> /dev/null; then
         echo '# fnm (Fast Node Manager)' >> "$HOME/.zshrc"
         echo 'eval "$(fnm env --use-on-cd --shell zsh)"' >> "$HOME/.zshrc"
     fi
+
+    # Install latest LTS Node.js and set as default if not already installed
+    eval "$(fnm env)"
+    if ! fnm list | grep -q "lts-latest"; then
+        echo "📦 Installing latest LTS Node.js via fnm..."
+        fnm install --lts
+        fnm default lts-latest
+        echo "✅ Node.js $(node --version) installed and set as default"
+    fi
 fi
 
 # Fix ownership for Homebrew directories
@@ -101,6 +110,12 @@ fi
 # Symlink PHP to standard location for compatibility. Batch uses this path in its shebang
 if [ ! -L /usr/bin/php ] || [ "$(readlink -f /usr/bin/php)" != "/usr/local/bin/php" ]; then
     sudo ln -sf /usr/local/bin/php /usr/bin/php
+fi
+
+# Install Cursor CLI (agent command)
+if ! command -v agent &> /dev/null; then
+    echo "📦 Installing Cursor CLI..."
+    curl https://cursor.com/install -fsS | bash
 fi
 
 # Check for issues and collect warnings
