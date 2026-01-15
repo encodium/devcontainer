@@ -1,0 +1,17 @@
+---
+description: AWS Infrastructure Reference
+alwaysApply: false
+---
+
+## Applications
+
+All production applications, except batch, are containers running in EKS. If a user is inquiring about details, environment, or other data attached to a running container use commands to fetch EKS data.
+
+### Batch
+
+Batch is a database-backed job chaining and queuing system written in PHP. Users may wish to find how many batch EC2 instances are running, and possibly of a specific type. Batch EC2 instaces are tagged with a "Function" tag that has a value of "batch".
+
+Other interesting tags users may need to discover or filter by:
+- env.batch_role: indicates the "pool type" of a batch instance. "batch" type would be the generic queue worker
+- env.daemon: indicates if the instance is dedicated to a specific work queue. "ebay" indicates it only processes ebay work
+- Deploy: there is a blue/green deployment for batch instances. This can help discover which terraform folder is currently applied and taking work

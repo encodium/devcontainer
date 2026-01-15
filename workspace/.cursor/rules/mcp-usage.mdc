@@ -32,6 +32,8 @@ aws sso login
 - Never run commands that would alter remote infrastructure
 - Avoid commands that alter localstack intrastructure without user permission
 
+For further reference about AWS infrastructure when helping a user find or discover: @aws-infrastructure.mdc
+
 ### GitHub (`project-0-workspace-github`)
 Use for repository operations, PR reviews, and issue management.
 
