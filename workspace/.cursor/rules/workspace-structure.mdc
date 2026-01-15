@@ -1,0 +1,33 @@
+---
+description: Workspace Project Structure
+globs: ["**/*"]
+alwaysApply: true
+---
+
+## Monorepo Structure
+
+This workspace contains multiple related projects:
+
+| Directory | Purpose | Key Rules Location |
+|-----------|---------|-------------------|
+| `/workspace/common` | Shared PHP library (legacy + modern) | `common/.cursor/rules/` |
+| `/workspace/webstore` | Webstore application | `webstore/.cursor/rules/` |
+| `/workspace/batch` | Batch processing jobs | - |
+| `/workspace/schema` | Database migrations (Atlas) | - |
+
+## Cross-Project Guidelines
+
+### When working in `common/`
+- Modern code goes in `src/` with Service pattern, Value Objects, Repositories
+- Legacy code in `tools/rp_common/` - avoid adding new code here
+- Follow rules in `common/.cursor/rules/`
+
+### When working in `batch/`
+- Batch jobs are PHP CLI scripts
+- Use `./batch_name` to execute from `/workspace/batch`
+- Check `batches/<name>/<Name>.php` for batch implementations
+
+### When working in `schema/`
+- Uses Atlas for database migrations
+- Migrations in `migrations/<database>/`
+- Run `atlas migrate apply --env <env>` to apply

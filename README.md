@@ -175,6 +175,32 @@ The devcontainer includes three services that start automatically:
 
 **Testing Services**: Run `dc test-env` to verify all services and CLI authentication are accessible.
 
+### AWS CLI Profiles
+
+The container is pre-configured with AWS CLI profiles in `~/.aws/config`. Check that file for what profiles are configured. See examples below.
+
+**LocalStack usage:**
+```bash
+aws --profile localstack s3 ls
+aws --profile localstack sqs list-queues
+
+# Or set profile for the session
+export AWS_PROFILE=localstack
+aws s3 ls
+```
+
+**SSO authentication (for production/staging):**
+```bash
+aws sso login
+# Then use profiles:
+aws --profile production s3 ls
+aws --profile staging sqs list-queues
+```
+
+> [!NOTE]
+> The `awslocal` alias is a shortcut for `aws --profile localstack`.
+> Run the `alias` command to see what other shortcuts are pre-configured!
+
 ## Authentication
 
 Authentication credentials persist across container rebuilds. Configure them once and they'll be saved.

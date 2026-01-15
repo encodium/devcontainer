@@ -1,5 +1,6 @@
 {
   "dockerComposeFile": "compose.yaml",
+  "shutdownAction": "stopCompose",
   "service": "shell",
   "workspaceFolder": "/workspace",
   "features": {
@@ -14,7 +15,7 @@
   },
   "mounts": [
     "source=${localWorkspaceFolder}/workspace,target=/workspace,type=bind,consistency=cached",
-    "source=${localWorkspaceFolder}/.devcontainer/scripts,target=/home/vscode/.devcontainer/scripts,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/.devcontainer/etc,target=/home/vscode/.devcontainer/etc,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/logs,target=/home/vscode/.devcontainer/logs,type=bind,consistency=cached"
   ],
   "containerEnv": {
@@ -56,9 +57,9 @@
       }
     }
   },
-  "initializeCommand": "bash ${localWorkspaceFolder}/.devcontainer/scripts/initialize.sh",
-  "postCreateCommand": "bash ~/.devcontainer/scripts/on-create.sh",
-  "postAttachCommand": "bash ~/.devcontainer/scripts/on-attach.sh",
+  "initializeCommand": "bash ${localWorkspaceFolder}/.devcontainer/etc/scripts/initialize.sh",
+  "postCreateCommand": "bash ~/.devcontainer/etc/scripts/on-create.sh",
+  "postAttachCommand": "bash ~/.devcontainer/etc/scripts/on-attach.sh",
   "remoteUser": "vscode",
   "containerUser": "vscode"
 }

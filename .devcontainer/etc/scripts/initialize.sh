@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEVCONTAINER_DIR="$(dirname "$SCRIPT_DIR")"
+DEVCONTAINER_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKSPACE_DIR="$(dirname "$DEVCONTAINER_DIR")/workspace"
 ENV_FILE="$DEVCONTAINER_DIR/.env"
 ENV_EXAMPLE="$DEVCONTAINER_DIR/.env.example"
@@ -153,7 +153,7 @@ fi
 
 # Check for host .npmrc file and prepare it for container
 HOST_NPMRC="${HOME}/.npmrc"
-NPMRC_SCRIPTS_FILE="$DEVCONTAINER_DIR/scripts/.npmrc.host"
+NPMRC_SCRIPTS_FILE="$DEVCONTAINER_DIR/etc/config/.npmrc.host"
 if [ -f "$HOST_NPMRC" ]; then
     cp "$HOST_NPMRC" "$NPMRC_SCRIPTS_FILE"
     chmod 600 "$NPMRC_SCRIPTS_FILE"

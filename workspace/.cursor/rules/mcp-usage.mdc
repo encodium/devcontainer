@@ -1,0 +1,69 @@
+---
+description: MCP Server Usage Guidelines
+globs: ["**/*"]
+alwaysApply: true
+---
+
+## Available MCP Servers
+
+### AWS (`project-0-workspace-aws`)
+Use for AWS infrastructure queries and operations.
+
+**Defaults:**
+- Region: `us-east-1` (this is default, only include `--region <REGION>` if different region needed)
+- Always include `--profile <environment>` flag
+
+**Profiles:**
+- `staging` - Staging environment (safe for read operations)
+- `production` - Production environment (require explicit user approval for any operation)
+- `localstack` - Not on AWS. Local development container running Localstack. Use this if user is developing software that depends on AWS unless it's obvious they want real, remote data.
+
+**Common operations:**
+- EC2: `aws ec2 describe-instances --profile staging --region us-east-1`
+- S3: `aws s3 ls --profile staging --region us-east-1`
+
+**Authentication:**
+If you receive SSO token errors, instruct the user to run:
+```bash
+aws sso login
+```
+
+**Caution:**
+- Never run commands that would alter remote infrastructure
+- Avoid commands that alter localstack intrastructure without user permission
+
+### GitHub (`project-0-workspace-github`)
+Use for repository operations, PR reviews, and issue management.
+
+**Organization:** encodium
+
+**Common tools:**
+- `get_pull_request` - Get PR details (owner, repo, pull_number)
+- `get_pull_request_files` - Get changed files in a PR
+- `get_pull_request_reviews` - Get review comments
+- `create_pull_request` - Create a new pull request
+
+### MySQL (`project-0-workspace-mysql`)
+Use for database queries during debugging or data exploration.
+
+**Caution:**
+- Prefer application code/repositories over direct DB queries for features
+- Never run mutations (INSERT/UPDATE/DELETE) without explicit user approval
+- Always use LIMIT on SELECT queries for large tables
+
+### Jira (`project-0-workspace-jira`)
+Use for issue tracking and project management.
+
+**Common tools:**
+- `getJiraIssue` - Fetch issue details
+- `searchJiraIssuesUsingJql` - Search with JQL
+- `addCommentToJiraIssue` - Add comments
+
+## MCP Troubleshooting
+
+| Error | Solution |
+|-------|----------|
+| SSO Token does not exist | User needs to run `aws sso login` |
+| UnauthorizedOperation | Wrong profile or missing permissions - confirm profile with user |
+| Tool not found | Check MCP server is enabled in mcp.json |
+| Empty results | Check region, filters, or tag names with user |

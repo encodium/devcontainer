@@ -92,7 +92,7 @@ RUN --mount=type=cache,target=/home/vscode/.cache/Homebrew,uid=1000,gid=1000 \
 
 # Set Homebrew prefix and configure environment
 ENV BREW_PREFIX="/home/linuxbrew/.linuxbrew"
-ENV PATH="${BREW_PREFIX}/bin:${BREW_PREFIX}/sbin:${PATH}"
+ENV PATH="/home/vscode/.local/bin:${BREW_PREFIX}/bin:${BREW_PREFIX}/sbin:${PATH}"
 ENV HOMEBREW_NO_AUTO_UPDATE=1
 
 # Install Homebrew packages with cache mount

@@ -1,0 +1,29 @@
+# LocalStack profile for local development
+# Usage: aws --profile localstack s3 ls
+# Alternate Usage: AWS_PROFILE=localstack s3 ls
+# Can also: `export AWS_PROFILE=localstack` to set that terminal to that profile
+[profile localstack]
+endpoint_url = http://localstack:4566
+region = us-east-1
+
+# SSO profile template
+# Usage: aws sso login
+[default]
+sso_start_url = https://revparts.awsapps.com/start
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+
+[profile production]
+sso_start_url = https://revparts.awsapps.com/start
+sso_account_id = 510501291647
+sso_role_name = ViewOnlyAccess
+region = us-east-1
+sso_region = us-east-1
+
+[profile staging]
+sso_start_url = https://revparts.awsapps.com/start
+sso_account_id = 725083125457
+sso_role_name = ViewOnlyAccess
+region = us-east-1
+sso_region = us-east-1
+

@@ -25,10 +25,25 @@ LOGS_DIR="$HOME/.devcontainer/logs"
 mkdir -p "$LOGS_DIR"
 
 # Ensure essential directories exist with correct permissions in the persistent home volume
+mkdir -p "$HOME/.aws"
 mkdir -p "$HOME/.composer"
 mkdir -p "$HOME/.config/gh"
+chmod 755 "$HOME/.aws"
 chmod 755 "$HOME/.composer"
 chmod 755 "$HOME/.config/gh"
+
+# Setup AWS CLI config from template if not present
+AWS_CONFIG_TEMPLATE="$HOME/.devcontainer/etc/config/aws-config.example"
+AWS_CREDS_TEMPLATE="$HOME/.devcontainer/etc/config/aws-credentials.example"
+if [ ! -f "$HOME/.aws/config" ] && [ -f "$AWS_CONFIG_TEMPLATE" ]; then
+    cp "$AWS_CONFIG_TEMPLATE" "$HOME/.aws/config"
+    echo "✅ AWS CLI config initialized (localstack profile ready)"
+fi
+if [ ! -f "$HOME/.aws/credentials" ] && [ -f "$AWS_CREDS_TEMPLATE" ]; then
+    cp "$AWS_CREDS_TEMPLATE" "$HOME/.aws/credentials"
+    chmod 600 "$HOME/.aws/credentials"
+    echo "✅ AWS CLI credentials for localstack profile initialized"
+fi
 
 # Update git exclude to prevent git-in-git issues
 GIT_EXCLUDE_FILE="/workspace/../.git/info/exclude"
@@ -45,42 +60,25 @@ git config --global url."https://".insteadOf git:// 2>/dev/null || true
 git config --global --add safe.directory /workspace
 git config --global init.defaultBranch main
 
-# Configure zsh scrollback
-if [ -f "$HOME/.zshrc" ] && ! grep -q "scrollback" "$HOME/.zshrc"; then
-    echo '' >> "$HOME/.zshrc"
-    echo '# Increase scrollback buffer' >> "$HOME/.zshrc"
-    echo "export HISTSIZE=500000" >> "$HOME/.zshrc"
-    echo "export SAVEHIST=500000" >> "$HOME/.zshrc"
-fi
-
-# Setup fzf for zsh (if installed via Homebrew)
+# Setup fnm and install Node.js if needed
 BREW_PREFIX="${BREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
-if [ -f "${BREW_PREFIX}/opt/fzf/shell/completion.zsh" ]; then
-    # Source fzf completion and key bindings in zshrc if not already present
-    if [ -f "$HOME/.zshrc" ] && ! grep -q "fzf/shell/completion.zsh" "$HOME/.zshrc"; then
-        echo '' >> "$HOME/.zshrc"
-        echo '# fzf' >> "$HOME/.zshrc"
-        echo "[ -f ${BREW_PREFIX}/opt/fzf/shell/completion.zsh ] && source ${BREW_PREFIX}/opt/fzf/shell/completion.zsh" >> "$HOME/.zshrc"
-        echo "[ -f ${BREW_PREFIX}/opt/fzf/shell/key-bindings.zsh ] && source ${BREW_PREFIX}/opt/fzf/shell/key-bindings.zsh" >> "$HOME/.zshrc"
-    fi
-fi
-
-# Setup fnm (Fast Node Manager) for zsh
 if command -v fnm &> /dev/null; then
-    # Add fnm initialization to zshrc if not already present
-    if [ -f "$HOME/.zshrc" ] && ! grep -q "fnm env" "$HOME/.zshrc"; then
-        echo '' >> "$HOME/.zshrc"
-        echo '# fnm (Fast Node Manager)' >> "$HOME/.zshrc"
-        echo 'eval "$(fnm env --use-on-cd --shell zsh)"' >> "$HOME/.zshrc"
-    fi
-
-    # Install latest LTS Node.js and set as default if not already installed
     eval "$(fnm env)"
     if ! fnm list | grep -q "lts-latest"; then
         echo "📦 Installing latest LTS Node.js via fnm..."
         fnm install --lts
         fnm default lts-latest
         echo "✅ Node.js $(node --version) installed and set as default"
+    fi
+    
+    # Create symlinks for node/npm/npx in ~/.local/bin for non-interactive shells (e.g., MCP scripts)
+    # These chain through fnm's default alias, so they update when you run `fnm default <version>`
+    FNM_DEFAULT_BIN="$HOME/.local/share/fnm/aliases/default/bin"
+    if [ -d "$FNM_DEFAULT_BIN" ]; then
+        mkdir -p "$HOME/.local/bin"
+        ln -sf "$FNM_DEFAULT_BIN/node" "$HOME/.local/bin/node"
+        ln -sf "$FNM_DEFAULT_BIN/npm" "$HOME/.local/bin/npm"
+        ln -sf "$FNM_DEFAULT_BIN/npx" "$HOME/.local/bin/npx"
     fi
 fi
 
@@ -183,7 +181,7 @@ fi
 # Import host .npmrc if available, otherwise check existing npm authentication
 NPMRC_FILE="$HOME/.npmrc"
 # Check for host .npmrc in the mounted scripts directory
-NPMRC_HOST_FILE="$HOME/.devcontainer/scripts/.npmrc.host"
+NPMRC_HOST_FILE="$HOME/.devcontainer/etc/config/.npmrc.host"
 NPM_AUTH_VALID=false
 
 if [ -f "$NPMRC_HOST_FILE" ]; then

@@ -664,6 +664,9 @@ dc-schema-upgrade() {
     echo "🔄 Running schema migrations..."
     echo ""
     
+    # Atlas requires being in the schema directory to find atlas.hcl
+    cd /workspace/schema || { echo "❌ ERROR: /workspace/schema not found"; return 1; }
+    
     local failed=0
     
     # Sequential migrations for non-tenant databases
