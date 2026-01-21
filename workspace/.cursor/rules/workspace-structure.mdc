@@ -6,7 +6,7 @@ alwaysApply: true
 
 ## Monorepo Structure
 
-This workspace contains multiple related projects:
+This workspace contains multiple related projects. The below is not an exhaustive list.
 
 | Directory | Purpose | Key Rules Location |
 |-----------|---------|-------------------|
@@ -14,6 +14,23 @@ This workspace contains multiple related projects:
 | `/workspace/webstore` | Webstore application | `webstore/.cursor/rules/` |
 | `/workspace/batch` | Batch processing jobs | - |
 | `/workspace/schema` | Database migrations (Atlas) | - |
+
+## Per-Repository Rules
+
+Each repository may contain its own rules in `.cursor/rules/`. When working with files:
+
+1. Identify the repository root (first-level directory under `/workspace/`)
+2. Check if `<repo>/.cursor/rules/` exists
+3. If it does, read and follow ALL `.mdc` files in that directory
+
+This applies to:
+- The repository containing the file being edited
+- Any repository being imported from or referenced
+- When repo is mentioned by name
+
+Example: If editing `/workspace/webstore/app/Order.php` that imports from `common/`, load rules from both and apply relevant rules:
+- `/workspace/webstore/.cursor/rules/*.mdc`
+- `/workspace/common/.cursor/rules/*.mdc`
 
 ## Cross-Project Guidelines
 
@@ -25,7 +42,9 @@ This workspace contains multiple related projects:
 ### When working in `batch/`
 - Batch jobs are PHP CLI scripts
 - Use `./batch_name` to execute from `/workspace/batch`
+- Note that the symlink to index.php is snake case matching the capital case class/file under `/workspace/batch/batches/` an example running `./workspace/batch/test_cli` will execute the code in `/workspace/batch/batches/test_cli/TestCli.php`
 - Check `batches/<name>/<Name>.php` for batch implementations
+- It is generally safe in this local devcontainer to execute batches for test purposes. In cases where you are aware of AWS or other external dependencies, please prompt user before running a batch locally.
 
 ### When working in `schema/`
 - Uses Atlas for database migrations

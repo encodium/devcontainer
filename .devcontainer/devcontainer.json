@@ -28,7 +28,8 @@
         "eamodio.gitlens",
         "bmewburn.vscode-intelephense-client",
         "Natizyskunk.sftp",
-        "Ariga.atlas-hcl"
+        "Ariga.atlas-hcl",
+        "SonarSource.sonarlint-vscode"
       ],
       "settings": {
         "php.validate.executablePath": "/usr/local/bin/php",
