@@ -32,17 +32,18 @@ chmod 755 "$HOME/.aws"
 chmod 755 "$HOME/.composer"
 chmod 755 "$HOME/.config/gh"
 
-# Setup AWS CLI config from template if not present
-AWS_CONFIG_TEMPLATE="$HOME/.devcontainer/etc/config/aws-config.example"
-AWS_CREDS_TEMPLATE="$HOME/.devcontainer/etc/config/aws-credentials.example"
-if [ ! -f "$HOME/.aws/config" ] && [ -f "$AWS_CONFIG_TEMPLATE" ]; then
-    cp "$AWS_CONFIG_TEMPLATE" "$HOME/.aws/config"
-    echo "✅ AWS CLI config initialized (localstack profile ready)"
+# Setup AWS CLI config as symlink (no secrets, avoids drift)
+AWS_CONFIG_SOURCE="/devcontainer/config/aws-config"
+if [ -f "$AWS_CONFIG_SOURCE" ]; then
+    ln -sf "$AWS_CONFIG_SOURCE" "$HOME/.aws/config"
 fi
+
+# Setup AWS CLI credentials from template if not present (copy, may contain secrets)
+AWS_CREDS_TEMPLATE="/devcontainer/config/aws-credentials.example"
 if [ ! -f "$HOME/.aws/credentials" ] && [ -f "$AWS_CREDS_TEMPLATE" ]; then
     cp "$AWS_CREDS_TEMPLATE" "$HOME/.aws/credentials"
     chmod 600 "$HOME/.aws/credentials"
-    echo "✅ AWS CLI credentials for localstack profile initialized"
+    echo "✅ AWS CLI credentials initialized from template"
 fi
 
 # Update git exclude to prevent git-in-git issues
@@ -116,6 +117,28 @@ if ! command -v agent &> /dev/null; then
     curl https://cursor.com/install -fsS | bash
 fi
 
+# Install rp CLI from private GitHub repo (requires gh auth)
+RP_CLI_BIN="$HOME/.local/bin/rp"
+if gh auth status &>/dev/null; then
+    # Check if rp needs updating by comparing versions
+    LATEST_RP_VERSION=$(gh release view --repo encodium/rp-cli-zero --json tagName -q '.tagName' 2>/dev/null || echo "")
+    CURRENT_RP_VERSION=""
+    if [ -x "$RP_CLI_BIN" ]; then
+        CURRENT_RP_VERSION=$("$RP_CLI_BIN" --version 2>/dev/null | head -1 || echo "")
+    fi
+    
+    if [ -z "$CURRENT_RP_VERSION" ] || [ "$LATEST_RP_VERSION" != "$CURRENT_RP_VERSION" ]; then
+        echo "📦 Installing rp CLI..."
+        mkdir -p "$HOME/.local/bin"
+        if gh release download --repo encodium/rp-cli-zero --pattern 'rp' --output "$RP_CLI_BIN" --clobber 2>/dev/null; then
+            chmod +x "$RP_CLI_BIN"
+            echo "✅ rp CLI installed ($LATEST_RP_VERSION)"
+        else
+            echo "⚠️  Failed to download rp CLI from encodium/rp-cli-zero"
+        fi
+    fi
+fi
+
 # Check for issues and collect warnings
 WARNINGS=()
 MISSING_AUTH=()
@@ -180,8 +203,8 @@ fi
 
 # Import host .npmrc if available, otherwise check existing npm authentication
 NPMRC_FILE="$HOME/.npmrc"
-# Check for host .npmrc in the mounted scripts directory
-NPMRC_HOST_FILE="$HOME/.devcontainer/etc/config/.npmrc.host"
+# Check for host .npmrc in the mounted config directory
+NPMRC_HOST_FILE="/devcontainer/config/.npmrc.host"
 NPM_AUTH_VALID=false
 
 if [ -f "$NPMRC_HOST_FILE" ]; then

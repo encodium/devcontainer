@@ -969,6 +969,341 @@ dc-redis() {
     esac
 }
 
+# =============================================================================
+# Secrets Management
+# =============================================================================
+
+# Sync secrets from Vault using consul-template
+# Usage: dc-secrets-sync <repo-path> [vault-env]
+dc-secrets-sync() {
+    local repo_path="${1:-}"
+    local vault_env="${2:-dev}"
+    
+    if [ -z "$repo_path" ]; then
+        echo "Usage: dc secrets sync <repo-path> [vault-env]"
+        echo "Example: dc secrets sync webstore dev"
+        return 1
+    fi
+    
+    # Resolve to absolute path, checking /workspace first for convenience
+    if [[ ! "$repo_path" = /* ]]; then
+        if [ -d "/workspace/$repo_path" ]; then
+            repo_path="/workspace/$repo_path"
+        elif [ -d "$repo_path" ]; then
+            repo_path="$(cd "$repo_path" 2>/dev/null && pwd)"
+        else
+            echo "❌ ERROR: Directory not found: $repo_path"
+            echo "   Try: dc secrets sync webstore"
+            return 1
+        fi
+    fi
+    
+    local template_path="$repo_path/deployments/files/config/.env"
+    local output_path="$repo_path/.env.secrets"
+    
+    if [ ! -f "$template_path" ]; then
+        echo "❌ ERROR: Template not found: $template_path"
+        return 1
+    fi
+    
+    # Vault configuration
+    local vault_addr="${VAULT_ADDR:-http://localhost:8200}"
+    export VAULT_ADDR="$vault_addr"
+    
+    # Ensure port-forward is running
+    if ! nc -z localhost 8200 2>/dev/null; then
+        dc-secrets-vault-proxy || return 1
+        echo ""
+    fi
+    
+    # Check Vault connectivity
+    if ! vault status &>/dev/null; then
+        echo "❌ ERROR: Cannot connect to Vault at $vault_addr"
+        return 1
+    fi
+    
+    # Check authentication
+    if ! vault token lookup &>/dev/null; then
+        echo "❌ ERROR: Not authenticated to Vault"
+        echo ""
+        echo "   Run: dc secrets vault-login"
+        return 1
+    fi
+    
+    echo "🔐 Syncing secrets from Vault ($vault_env)..."
+    echo "   Template: $template_path"
+    echo "   Output:   $output_path"
+    echo ""
+    
+    # Run consul-template in one-shot mode
+    if consul-template \
+        -once \
+        -vault-addr="$vault_addr" \
+        -template="$template_path:$output_path" \
+        2>&1; then
+        
+        # Count secrets generated
+        local secret_count
+        secret_count=$(grep -c '=' "$output_path" 2>/dev/null || echo "0")
+        echo ""
+        echo "✅ Generated $secret_count secrets in .env.secrets"
+        
+        # Warn if .env.secrets isn't gitignored
+        if [ -d "$repo_path/.git" ]; then
+            if ! git -C "$repo_path" check-ignore -q ".env.secrets" 2>/dev/null; then
+                echo ""
+                echo "⚠️  Warning: .env.secrets is not in .gitignore"
+                echo "   Add '.env.secrets' to $repo_path/.gitignore"
+            fi
+        fi
+    else
+        echo "❌ ERROR: consul-template failed"
+        return 1
+    fi
+}
+
+# Check Vault connectivity and authentication status
+dc-secrets-status() {
+    local vault_addr="${VAULT_ADDR:-http://localhost:8200}"
+    
+    echo "🔐 Vault Status"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    echo -n "AWS SSO (staging profile): "
+    if AWS_PROFILE=staging aws sts get-caller-identity &>/dev/null; then
+        echo "✅"
+    else
+        echo "❌ (run: aws sso login)"
+    fi
+    
+    echo -n "Port-forward (localhost:8200): "
+    if nc -z localhost 8200 2>/dev/null; then
+        echo "✅"
+    else
+        echo "❌ (run: dc secrets vault-proxy)"
+    fi
+    
+    echo -n "Vault connectivity: "
+    if vault status &>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+    fi
+    
+    echo -n "Vault authentication: "
+    if vault token lookup &>/dev/null; then
+        echo "✅"
+    else
+        echo "❌ (run: dc secrets vault-login)"
+    fi
+    echo ""
+}
+
+# Login to Vault using GitHub auth (uses gh CLI token)
+dc-secrets-vault-login() {
+    local vault_addr="${VAULT_ADDR:-http://localhost:8200}"
+    export VAULT_ADDR="$vault_addr"
+    
+    echo "🔐 Vault Login (GitHub Auth)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Check if already authenticated
+    if vault token lookup &>/dev/null; then
+        echo "✅ Already authenticated to Vault"
+        return 0
+    fi
+    
+    # Ensure port-forward is running
+    if ! nc -z localhost 8200 2>/dev/null; then
+        dc-secrets-vault-proxy || return 1
+        echo ""
+    fi
+    
+    # Check gh CLI authentication
+    if ! gh auth status &>/dev/null; then
+        echo "❌ ERROR: GitHub CLI not authenticated"
+        echo "   Run: dc github-cli"
+        return 1
+    fi
+    
+    # Get GitHub token
+    local gh_token
+    if ! gh_token=$(gh auth token 2>/dev/null); then
+        echo "❌ ERROR: Failed to get GitHub token"
+        return 1
+    fi
+    
+    echo "Authenticating to Vault with GitHub..."
+    if vault login -method=github token="$gh_token"; then
+        echo ""
+        echo "✅ Vault authentication successful"
+    else
+        echo ""
+        echo "❌ ERROR: Vault login failed"
+        echo "   Ensure your GitHub account has access to Vault"
+        return 1
+    fi
+}
+
+# Start kubectl port-forward to Vault
+dc-secrets-vault-proxy() {
+    echo "🔌 Vault Port-Forward"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Check if already running
+    if nc -z localhost 8200 2>/dev/null; then
+        echo "✅ Port 8200 already listening"
+        echo "   Vault proxy may already be running"
+        return 0
+    fi
+    
+    # Use staging AWS profile for EKS access
+    export AWS_PROFILE=staging
+    
+    # Check AWS SSO authentication
+    if ! aws sts get-caller-identity &>/dev/null; then
+        echo "❌ ERROR: AWS SSO session expired or not authenticated"
+        echo "   Run: aws sso login"
+        return 1
+    fi
+    
+    # Check kubectl context
+    if ! kubectl config current-context &>/dev/null; then
+        echo "❌ ERROR: No kubectl context configured"
+        echo "   Configure kubectl to connect to your cluster first"
+        return 1
+    fi
+    
+    echo "Starting port-forward to Vault (AWS profile: staging)..."
+    kubectl port-forward svc/vault 8200:8200 -n vault &
+    local pf_pid=$!
+    
+    # Wait for port to be available
+    local attempts=0
+    while ! nc -z localhost 8200 2>/dev/null; do
+        sleep 1
+        attempts=$((attempts + 1))
+        if [ $attempts -ge 10 ]; then
+            echo "❌ ERROR: Port-forward failed to start"
+            echo "   Ensure VPN is connected and kubectl can reach the cluster"
+            kill $pf_pid 2>/dev/null || true
+            return 1
+        fi
+    done
+    
+    echo "✅ Port-forward established"
+    echo "   PID: $pf_pid"
+    echo "   Vault: http://localhost:8200"
+    echo ""
+    echo "To stop: kill $pf_pid"
+}
+
+# Secrets command dispatcher
+dc-secrets() {
+    local subcommand="${1:-}"
+    
+    case "$subcommand" in
+        sync)
+            shift
+            dc-secrets-sync "$@"
+            ;;
+        status)
+            dc-secrets-status
+            ;;
+        vault-proxy)
+            dc-secrets-vault-proxy
+            ;;
+        vault-login)
+            dc-secrets-vault-login
+            ;;
+        *)
+            echo "Usage: dc secrets <command>"
+            echo ""
+            echo "Commands:"
+            echo "  vault-proxy        - Start kubectl port-forward to Vault"
+            echo "  vault-login        - Authenticate to Vault using GitHub (via gh CLI)"
+            echo "  status             - Check Vault connectivity and authentication"
+            echo "  sync <repo> [env]  - Sync secrets from Vault (e.g., dc secrets sync webstore dev)"
+            echo ""
+            echo "Workflow:"
+            echo "  1. Connect VPN"
+            echo "  2. aws sso login              (if AWS session expired)"
+            echo "  3. dc secrets vault-login     (auto-starts port-forward)"
+            echo "  4. dc secrets sync webstore"
+            return 1
+            ;;
+    esac
+}
+
+# =============================================================================
+# Webstore Channels
+# =============================================================================
+
+# List webstore channels from local MySQL
+dc-channels() {
+    echo "🏪 Webstore Channels"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Check MySQL connectivity
+    if ! MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -e "SELECT 1;" &>/dev/null; then
+        echo "❌ ERROR: Cannot connect to MySQL"
+        echo "   Make sure the MySQL container is running"
+        return 1
+    fi
+    
+    echo "Configured Webstores (store table):"
+    echo ""
+    
+    local store_results
+    store_results=$(MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -N -e "
+        SELECT COALESCE(hostname, '(no hostname)') as hostname, product_hash 
+        FROM corporate.store 
+        ORDER BY hostname;
+    " 2>/dev/null)
+    
+    if [ -z "$store_results" ]; then
+        echo "  (no stores configured)"
+    else
+        printf "  %-45s %s\n" "HOSTNAME" "PRODUCT_HASH"
+        printf "  %-45s %s\n" "--------" "------------"
+        echo "$store_results" | while IFS=$'\t' read -r hostname product_hash; do
+            printf "  %-45s %s\n" "$hostname" "$product_hash"
+        done
+    fi
+    
+    echo ""
+    echo "Unconfigured Channels (customer_products only):"
+    echo ""
+    
+    local unconfigured
+    unconfigured=$(MYSQL_PWD="${MYSQL_PASSWORD}" mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -N -e "
+        SELECT cp.product_hash
+        FROM corporate.customer_products cp
+        LEFT JOIN corporate.store s ON cp.product_hash = s.product_hash
+        WHERE s.product_hash IS NULL
+          AND cp.product_hash IS NOT NULL
+          AND cp.product_hash != ''
+        ORDER BY cp.product_hash;
+    " 2>/dev/null)
+    
+    if [ -z "$unconfigured" ]; then
+        echo "  (none - all channels have store entries)"
+    else
+        printf "  %-35s %s\n" "PRODUCT_HASH" "NOTE"
+        printf "  %-35s %s\n" "------------" "----"
+        echo "$unconfigured" | while read -r product_hash; do
+            printf "  %-35s %s\n" "$product_hash" "not in store table"
+        done
+    fi
+    
+    echo ""
+    echo "To add a store entry, insert into corporate.store with hostname and product_hash."
+}
+
 # Display help/quick reference
 dc-help() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -997,6 +1332,18 @@ dc-help() {
     echo ""
     echo "Redis Management:"
     echo "  dc redis clear          - Delete all data from Redis (destructive)"
+    echo ""
+    echo "Secrets Management:"
+    echo "  dc secrets vault-proxy        - Start kubectl port-forward to Vault"
+    echo "  dc secrets vault-login        - Authenticate to Vault using GitHub (via gh CLI)"
+    echo "  dc secrets status             - Check Vault connectivity and authentication"
+    echo "  dc secrets sync <repo> [env]  - Sync secrets from Vault (auto port-forwards)"
+    echo ""
+    echo "Web Applications:"
+    echo "  dc channels             - List webstore channels from local MySQL"
+    echo ""
+    echo "  To enable apps, set COMPOSE_PROFILES in .devcontainer/.env and rebuild."
+    echo "  Example: COMPOSE_PROFILES=webstore"
     echo ""
     echo "Environment Testing:"
     echo "  dc test-env             - Test connectivity to services and CLI authentication"
@@ -1093,6 +1440,13 @@ main() {
         redis)
             shift
             dc-redis "$@"
+            ;;
+        secrets)
+            shift
+            dc-secrets "$@"
+            ;;
+        channels)
+            dc-channels
             ;;
         help|--help|-h)
             dc-help

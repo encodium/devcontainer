@@ -10,10 +10,14 @@ This workspace contains multiple related projects. The below is not an exhaustiv
 
 | Directory | Purpose | Key Rules Location |
 |-----------|---------|-------------------|
-| `/workspace/common` | Shared PHP library (legacy + modern) | `common/.cursor/rules/` |
-| `/workspace/webstore` | Webstore application | `webstore/.cursor/rules/` |
 | `/workspace/batch` | Batch processing jobs | - |
+| `/workspace/catalog_api` | Catalog API service | - |
+| `/workspace/common` | Shared PHP library (legacy + modern) | `common/.cursor/rules/` |
+| `/workspace/internal_api` | Internal API service | - |
+| `/workspace/license_api` | License API service | - |
+| `/workspace/radmin` | Admin interface | - |
 | `/workspace/schema` | Database migrations (Atlas) | - |
+| `/workspace/webstore` | Webstore application | `webstore/.cursor/rules/` |
 
 ## Per-Repository Rules
 
@@ -26,7 +30,7 @@ Each repository may contain its own rules in `.cursor/rules/`. When working with
 This applies to:
 - The repository containing the file being edited
 - Any repository being imported from or referenced
-- When repo is mentioned by name
+- When repo is mentioned by name, e.g "common" or "webstore"
 
 Example: If editing `/workspace/webstore/app/Order.php` that imports from `common/`, load rules from both and apply relevant rules:
 - `/workspace/webstore/.cursor/rules/*.mdc`
@@ -50,3 +54,9 @@ Example: If editing `/workspace/webstore/app/Order.php` that imports from `commo
 - Uses Atlas for database migrations
 - Migrations in `migrations/<database>/`
 - Run `atlas migrate apply --env <env>` to apply
+
+### Running Web Applications Locally
+- Web apps run via Docker Compose profiles with Traefik reverse proxy
+- Enable apps: Set `COMPOSE_PROFILES=webstore,internal-api` in `.devcontainer/.env` and rebuild
+- All apps use `*.revolutionparts.test` domains (requires host DNS setup)
+- See `.cursor/rules/local-apps.mdc` for details

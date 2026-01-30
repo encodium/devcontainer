@@ -15,7 +15,7 @@
   },
   "mounts": [
     "source=${localWorkspaceFolder}/workspace,target=/workspace,type=bind,consistency=cached",
-    "source=${localWorkspaceFolder}/.devcontainer/etc,target=/home/vscode/.devcontainer/etc,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/.devcontainer/shell,target=/devcontainer,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/logs,target=/home/vscode/.devcontainer/logs,type=bind,consistency=cached"
   ],
   "containerEnv": {
@@ -24,43 +24,43 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "xdebug.php-debug",
-        "eamodio.gitlens",
-        "bmewburn.vscode-intelephense-client",
-        "Natizyskunk.sftp",
         "Ariga.atlas-hcl",
-        "SonarSource.sonarlint-vscode"
+        "bmewburn.vscode-intelephense-client",
+        "eamodio.gitlens",
+        "Natizyskunk.sftp",
+        "SonarSource.sonarlint-vscode",
+        "xdebug.php-debug"
       ],
       "settings": {
-        "php.validate.executablePath": "/usr/local/bin/php",
         "php.debug.executablePath": "/usr/local/bin/php",
+        "php.validate.executablePath": "/usr/local/bin/php",
+        "search.exclude": {
+          "**/coverage": true,
+          "**/coverage-src": true,
+          "**/dist": true,
+          "**/logs": true,
+          "**/node_modules": true,
+          "**/vendor": true
+        },
+        "search.useIgnoreFiles": false,
+        "terminal.integrated.automationProfile.linux": {
+          "path": "/usr/bin/zsh"
+        },
         "terminal.integrated.defaultProfile.linux": "zsh",
         "terminal.integrated.profiles.linux": {
           "zsh": {
             "path": "/usr/bin/zsh"
           }
         },
-        "search.useIgnoreFiles": false,
-        "search.exclude": {
-          "**/node_modules": true,
-          "**/vendor": true,
-          "**/dist": true,
-          "**/coverage": true,
-          "**/coverage-src": true,
-          "**/logs": true
-        },
-        "workbench.panel.defaultLocation": "bottom",
-        "workbench.panel.opensMaximized": "never",
         "terminal.integrated.showExitAlert": false,
-        "terminal.integrated.automationProfile.linux": {
-          "path": "/usr/bin/zsh"
-        }
+        "workbench.panel.defaultLocation": "bottom",
+        "workbench.panel.opensMaximized": "never"
       }
     }
   },
-  "initializeCommand": "bash ${localWorkspaceFolder}/.devcontainer/etc/scripts/initialize.sh",
-  "postCreateCommand": "bash ~/.devcontainer/etc/scripts/on-create.sh",
-  "postAttachCommand": "bash ~/.devcontainer/etc/scripts/on-attach.sh",
+  "initializeCommand": "bash ${localWorkspaceFolder}/.devcontainer/initialize.sh",
+  "postCreateCommand": "bash /devcontainer/scripts/on-create.sh",
+  "postAttachCommand": "bash /devcontainer/scripts/on-attach.sh",
   "remoteUser": "vscode",
   "containerUser": "vscode"
 }

@@ -6,14 +6,15 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEVCONTAINER_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-WORKSPACE_DIR="$(dirname "$DEVCONTAINER_DIR")/workspace"
+DEVCONTAINER_DIR="$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_DIR="$REPO_ROOT/workspace"
 ENV_FILE="$DEVCONTAINER_DIR/.env"
 ENV_EXAMPLE="$DEVCONTAINER_DIR/.env.example"
 ENV_RUN_FILE="$DEVCONTAINER_DIR/.env.run"
 
 # Source shared functions
-source "$SCRIPT_DIR/functions.sh"
+source "$DEVCONTAINER_DIR/shell/scripts/functions.sh"
 
 # Check if .env file exists
 if [ ! -f "$ENV_FILE" ]; then
@@ -153,7 +154,7 @@ fi
 
 # Check for host .npmrc file and prepare it for container
 HOST_NPMRC="${HOME}/.npmrc"
-NPMRC_SCRIPTS_FILE="$DEVCONTAINER_DIR/etc/config/.npmrc.host"
+NPMRC_SCRIPTS_FILE="$DEVCONTAINER_DIR/shell/config/.npmrc.host"
 if [ -f "$HOST_NPMRC" ]; then
     cp "$HOST_NPMRC" "$NPMRC_SCRIPTS_FILE"
     chmod 600 "$NPMRC_SCRIPTS_FILE"

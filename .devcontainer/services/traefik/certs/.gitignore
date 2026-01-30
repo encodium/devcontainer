@@ -1,0 +1,4 @@
+# Certificates are generated per-user via mkcert
+# Do not commit - each user generates their own
+*.pem
+!.gitignore

@@ -52,37 +52,87 @@ Instructions TBD using `devcontainer` CLI tools
 
 ## Quick Start
 
-1. **Clone this repository** to your local machine:
+### Host Machine Setup (One-Time)
+
+1. **Configure local DNS** for `*.revolutionparts.test` domains:
+
+   **macOS:**
+   ```bash
+   sudo mkdir -p /etc/resolver
+   echo -e "nameserver 127.0.0.1\nport 5354" | sudo tee /etc/resolver/test
+   ```
+
+   **Linux (systemd-resolved):**
+   ```bash
+   sudo mkdir -p /etc/systemd/resolved.conf.d
+   echo -e "[Resolve]\nDNS=127.0.0.1:5354\nDomains=~test" | sudo tee /etc/systemd/resolved.conf.d/test.conf
+   sudo systemctl restart systemd-resolved
+   ```
+   > [!NOTE]
+   > Use `:5354` (colon) not `#5354` (hash). The hash syntax fails on Bluefin, Fedora Silverblue, and some systemd versions.
+
+   **Windows:** Install [Acrylic DNS Proxy](https://mayakron.altervista.org/support/acrylic/Home.htm), configure to forward `.test` to `127.0.0.1:5354`.
+
+2. **Generate and trust TLS certificates**:
+   ```bash
+   # Install mkcert (and NSS for Linux browser trust)
+   brew install mkcert      # macOS/Linux with Homebrew
+   brew install nss         # Linux only - required for browser trust
+   
+   # Install the local CA into system trust store
+   mkcert -install
+   
+   # Generate certificates for local domains
+   cd /path/to/devcontainer/.devcontainer/services/traefik/certs
+   mkcert -cert-file local-cert.pem -key-file local-key.pem \
+     "revolutionparts.test" "*.revolutionparts.test" "*.webstore.revolutionparts.test"
+   ```
+   
+   > [!NOTE]
+   > Each developer generates their own certificates. They are gitignored.
+   
+   > [!WARNING]
+   > On Linux, install NSS *before* running `mkcert -install`. Do NOT use sudo with mkcert.
+
+### Container Setup
+
+3. **Clone this repository**:
    ```bash
    git clone https://github.com/encodium/devcontainer.git
    cd devcontainer
    ```
 
-2. **Copy the environment file** (if `.env.example` exists):
+4. **Copy the environment file**:
    ```bash
    cp .devcontainer/.env.example .devcontainer/.env
    ```
-    > [!NOTE]  
-    > - If you have multiple clones of the `devcontainer` repo, you must ensure the `COMPOSE_PROJECT_NAME` variable in your `.env` file is unique from the others
-    > - You must also ensure all `_EXTERNAL_` port numbers are unique from the others or docker will fail to start all services
+   > [!NOTE]  
+   > - If you have multiple clones of the `devcontainer` repo, ensure `COMPOSE_PROJECT_NAME` is unique
+   > - Ensure all `_EXTERNAL_` port numbers are unique or docker will fail to start
 
-3. **Open in VS Code/Cursor**: Open the repository folder in your editor
+5. **Open in VS Code/Cursor** and click "Reopen in Container" when prompted
 
-4. **Reopen in Container**: When prompted, click "Reopen in Container" (or press `F1` and select "Dev Containers: Reopen in Container")
+6. **Wait for setup** (first build may take a few minutes)
 
-5. **Wait for setup**: The container will build and start services automatically (first time may take a few minutes)
-
-6. **Clone your repositories**: Once inside the container, run:
+7. **Clone your repositories** (inside container):
    ```bash
-   dc clone-repos batch,common
+   dc clone-repos batch,common,webstore
    ```
 
-7. **Link common repository** (if needed):
+8. **Link common repository**:
    ```bash
    dc link-common
    ```
 
-8. **Configure additional authentication** (see Authentication section below)
+9. **Enable web applications** (optional):
+   
+   Add to `.devcontainer/.env`:
+   ```bash
+   COMPOSE_PROFILES=webstore
+   ```
+   Then rebuild the devcontainer. Visit https://webstore.revolutionparts.test
+
+10. **Configure authentication** (see Authentication section below)
 
 ## Available Commands
 
@@ -201,6 +251,82 @@ aws --profile staging sqs list-queues
 > The `awslocal` alias is a shortcut for `aws --profile localstack`.
 > Run the `alias` command to see what other shortcuts are pre-configured!
 
+## Local Web Applications
+
+Run PHP web applications locally with HTTPS via Traefik reverse proxy.
+
+### Available Apps
+
+| App | Domain | Profile |
+|-----|--------|---------|
+| Webstore | `*.webstore.revolutionparts.test` | `webstore` |
+| Catalog API | `catalog-api.revolutionparts.test` | `catalog-api` |
+| Internal API | `internal-api.revolutionparts.test` | `internal-api` |
+| License API | `license-api.revolutionparts.test` | `license-api` |
+| Radmin | `radmin.revolutionparts.test` | `radmin` |
+| Traefik Dashboard | `proxy.revolutionparts.test` | (always on) |
+
+### Enabling Apps
+
+To enable web applications, set `COMPOSE_PROFILES` in `.devcontainer/.env`:
+
+```bash
+# Single app
+COMPOSE_PROFILES=webstore
+
+# Multiple apps (comma-separated)
+COMPOSE_PROFILES=webstore,radmin
+```
+
+Then rebuild the devcontainer (Cmd/Ctrl+Shift+P → "Dev Containers: Rebuild Container").
+
+### DNS Setup (One-Time, Host Machine)
+
+The devcontainer runs a DNS server on port 5354. Configure your host to use it for `.test` domains.
+
+**macOS:**
+```bash
+sudo mkdir -p /etc/resolver
+echo -e "nameserver 127.0.0.1\nport 5354" | sudo tee /etc/resolver/test
+```
+
+**Linux (systemd-resolved):**
+```bash
+sudo mkdir -p /etc/systemd/resolved.conf.d
+echo -e "[Resolve]\nDNS=127.0.0.1:5354\nDomains=~test" | sudo tee /etc/systemd/resolved.conf.d/test.conf
+sudo systemctl restart systemd-resolved
+```
+> Use `:5354` (colon) not `#5354` (hash). The hash syntax fails on Bluefin/Silverblue and some systemd versions.
+
+**Linux (NetworkManager + dnsmasq):**
+```bash
+echo "server=/test/127.0.0.1#5354" | sudo tee /etc/NetworkManager/dnsmasq.d/test.conf
+sudo systemctl restart NetworkManager
+```
+
+**Windows:** Install [Acrylic DNS Proxy](https://mayakron.altervista.org/support/acrylic/Home.htm), configure to forward `.test` to `127.0.0.1:5354`.
+
+### TLS Setup (One-Time, Host Machine)
+
+Generate and trust certificates for HTTPS. See Quick Start step 2 for full instructions.
+
+```bash
+brew install mkcert
+brew install nss      # Linux only - install BEFORE mkcert -install
+mkcert -install       # Do NOT use sudo on Linux
+cd .devcontainer/services/traefik/certs
+mkcert -cert-file local-cert.pem -key-file local-key.pem \
+  "revolutionparts.test" "*.revolutionparts.test" "*.webstore.revolutionparts.test"
+```
+
+### Webstore Channels
+
+List configured webstore channels from local MySQL:
+
+```bash
+dc channels
+```
+
 ## Authentication
 
 Authentication credentials persist across container rebuilds. Configure them once and they'll be saved.
@@ -242,6 +368,28 @@ This uses your existing GitHub CLI authentication, so make sure `gh auth login` 
 ### SSH
 
 SSH agent forwarding is automatically configured. Your host's SSH keys are available in the container without copying them. Just use `git` commands normally.
+
+### Vault (Secrets)
+
+Sync secrets from Vault for local development. Requires VPN connection.
+
+```bash
+# 1. Connect to VPN
+
+# 2. Authenticate to AWS (if session expired)
+aws sso login
+
+# 3. Authenticate to Vault (auto-starts port-forward, uses GitHub token)
+dc secrets vault-login
+
+# 4. Sync secrets for a repo
+dc secrets sync webstore
+
+# Check status anytime
+dc secrets status
+```
+
+Secrets are written to `.env.secrets` in the repo root.
 
 ## Composer Link
 

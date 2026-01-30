@@ -1,3 +1,5 @@
+name: ${COMPOSE_PROJECT_NAME:-devcontainer}
+
 services:
   shell:
     build:
@@ -5,8 +7,8 @@ services:
       dockerfile: Dockerfile
     command: /bin/sh -c "while sleep 1000; do :; done"
     env_file:
-      - .env
-      - .env.run
+      - ./.env
+      - ./.env.run
     depends_on:
       - redis
       - mysql
@@ -23,7 +25,7 @@ services:
     ports:
       - "${REDIS_EXTERNAL_PORT:-6379}:${REDIS_PORT:-6379}"
     env_file:
-      - .env
+      - ./.env
     networks:
       - rp
     healthcheck:
@@ -38,7 +40,7 @@ services:
     ports:
       - "${MYSQL_EXTERNAL_PORT:-3306}:${MYSQL_PORT:-3306}"
     env_file:
-      - .env
+      - ./.env
     command:
       # Disable strict mode to match production Aurora MySQL defaults
       - --sql_mode=0
@@ -46,7 +48,7 @@ services:
       - rp
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./database/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+      - ./services/mysql/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "${MYSQL_HOST:-mysql}"]
       interval: 10s
@@ -75,6 +77,242 @@ services:
       retries: 5
     restart: unless-stopped
 
+  traefik:
+    image: traefik:v3.6
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - rp
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./services/traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ./services/traefik/dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+      - ./services/traefik/certs:/etc/certs:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`proxy.revolutionparts.test`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+    restart: unless-stopped
+
+  dnsmasq:
+    image: dockurr/dnsmasq
+    ports:
+      - "5354:53/udp"
+      - "5354:53/tcp"
+    networks:
+      - rp
+    volumes:
+      - ./services/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf:ro
+    restart: unless-stopped
+
+  # =============================================================================
+  # Web Applications (profile-based)
+  # To enable: set COMPOSE_PROFILES in .env or rebuild with --profile flag
+  # =============================================================================
+
+  # Webstore: *.webstore.revolutionparts.test
+  webstore-fpm:
+    profiles: ["webstore"]
+    build:
+      context: ../workspace/webstore
+      dockerfile: build/app/Dockerfile
+      target: dev
+    env_file:
+      - ./.env
+      - ./.env.apps
+    volumes:
+      - ../workspace/webstore:/usr/src/app
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - mysql
+      - redis
+
+  webstore-nginx:
+    profiles: ["webstore"]
+    build:
+      context: ../workspace/webstore
+      dockerfile: build/nginx/Dockerfile
+      target: dev
+    environment:
+      - FPM_HOST=webstore-fpm
+      - FPM_PORT=9000
+    volumes:
+      - ../workspace/webstore:/usr/src/app:ro
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - webstore-fpm
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webstore.rule=HostRegexp(`^.+\\.webstore\\.revolutionparts\\.test$`)"
+      - "traefik.http.routers.webstore.tls=true"
+      - "traefik.http.services.webstore.loadbalancer.server.port=8000"
+
+  # Catalog API: catalog-api.revolutionparts.test
+  catalog-api-fpm:
+    profiles: ["catalog-api"]
+    build:
+      context: ../workspace/catalog_api
+      dockerfile: build/app/Dockerfile
+      target: dev
+    env_file:
+      - ./.env
+      - ./.env.apps
+    volumes:
+      - ../workspace/catalog_api:/usr/src/app
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - mysql
+      - redis
+
+  catalog-api-nginx:
+    profiles: ["catalog-api"]
+    build:
+      context: ../workspace/catalog_api
+      dockerfile: build/nginx/Dockerfile
+    environment:
+      - FPM_HOST=catalog-api-fpm
+      - FPM_PORT=9000
+    volumes:
+      - ../workspace/catalog_api:/usr/src/app:ro
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - catalog-api-fpm
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.catalog-api.rule=Host(`catalog-api.revolutionparts.test`)"
+      - "traefik.http.routers.catalog-api.tls=true"
+      - "traefik.http.services.catalog-api.loadbalancer.server.port=8000"
+
+  # Internal API: internal-api.revolutionparts.test
+  internal-api-fpm:
+    profiles: ["internal-api"]
+    build:
+      context: ../workspace/internal_api
+      dockerfile: build/app/Dockerfile
+      target: dev
+    env_file:
+      - ./.env
+      - ./.env.apps
+    volumes:
+      - ../workspace/internal_api:/usr/src/app
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - mysql
+      - redis
+
+  internal-api-nginx:
+    profiles: ["internal-api"]
+    build:
+      context: ../workspace/internal_api
+      dockerfile: build/nginx/Dockerfile
+    environment:
+      - FPM_HOST=internal-api-fpm
+      - FPM_PORT=9000
+    volumes:
+      - ../workspace/internal_api:/usr/src/app:ro
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - internal-api-fpm
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.internal-api.rule=Host(`internal-api.revolutionparts.test`)"
+      - "traefik.http.routers.internal-api.tls=true"
+      - "traefik.http.services.internal-api.loadbalancer.server.port=8000"
+
+  # License API: license-api.revolutionparts.test
+  license-api-fpm:
+    profiles: ["license-api"]
+    build:
+      context: ../workspace/license_api
+      dockerfile: build/app/Dockerfile
+      target: dev
+    env_file:
+      - ./.env
+      - ./.env.apps
+    volumes:
+      - ../workspace/license_api:/usr/src/app
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - mysql
+      - redis
+
+  license-api-nginx:
+    profiles: ["license-api"]
+    build:
+      context: ../workspace/license_api
+      dockerfile: build/nginx/Dockerfile
+    environment:
+      - FPM_HOST=license-api-fpm
+      - FPM_PORT=9000
+    volumes:
+      - ../workspace/license_api:/usr/src/app:ro
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - license-api-fpm
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.license-api.rule=Host(`license-api.revolutionparts.test`)"
+      - "traefik.http.routers.license-api.tls=true"
+      - "traefik.http.services.license-api.loadbalancer.server.port=8000"
+
+  # Radmin: radmin.revolutionparts.test
+  radmin-fpm:
+    profiles: ["radmin"]
+    build:
+      context: ../workspace/radmin
+      dockerfile: build/app/Dockerfile
+      target: dev
+    env_file:
+      - ./.env
+      - ./.env.apps
+    volumes:
+      - ../workspace/radmin:/usr/src/app
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - mysql
+      - redis
+
+  radmin-nginx:
+    profiles: ["radmin"]
+    build:
+      context: ../workspace/radmin
+      dockerfile: build/nginx/Dockerfile
+    environment:
+      - FPM_HOST=radmin-fpm
+      - FPM_PORT=9000
+    volumes:
+      - ../workspace/radmin:/usr/src/app:ro
+      - ../workspace/common:/usr/src/app/vendor/revolutionparts/common:ro
+    networks:
+      - rp
+    depends_on:
+      - radmin-fpm
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radmin.rule=Host(`radmin.revolutionparts.test`)"
+      - "traefik.http.routers.radmin.tls=true"
+      - "traefik.http.services.radmin.loadbalancer.server.port=8000"
+
 volumes:
   home-data:
   mysql-data:
@@ -84,4 +322,3 @@ networks:
   rp:
     driver: bridge
     enable_ipv6: false
-

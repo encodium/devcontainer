@@ -9,7 +9,7 @@ if [ -f ".env" ]; then
 fi
 
 BREW_PREFIX="/home/linuxbrew/.linuxbrew"
-SCRIPTS_DIR="$HOME/.devcontainer/etc/scripts"
+SCRIPTS_DIR="/devcontainer/scripts"
 ALIASES_FILE="$SCRIPTS_DIR/aliases.sh"
 ZSHRC_RP="$HOME/.zshrc_rp"
 
@@ -31,10 +31,10 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export PATH="$BREW_PREFIX/opt/mysql-client/bin:$PATH"
 
 # Devcontainer scripts
-export PATH="$HOME/.devcontainer/etc/scripts:$PATH"
+export PATH="/devcontainer/scripts:$PATH"
 
 # Devcontainer aliases
-[ -f "$HOME/.devcontainer/etc/scripts/aliases.sh" ] && source "$HOME/.devcontainer/etc/scripts/aliases.sh"
+[ -f "/devcontainer/scripts/aliases.sh" ] && source "/devcontainer/scripts/aliases.sh"
 
 # fzf
 [ -f $BREW_PREFIX/opt/fzf/shell/completion.zsh ] && source $BREW_PREFIX/opt/fzf/shell/completion.zsh

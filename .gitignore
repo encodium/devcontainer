@@ -1,5 +1,7 @@
 .env
+.env.apps
 .env.run
+.env.secrets
 .npmrc.host
 !workspace/
 workspace/*
