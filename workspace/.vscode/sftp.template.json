@@ -1,0 +1,19 @@
+{
+    "name": "{{REPO_NAME}}",
+    "context": "{{REPO_NAME}}",
+    "host": "{{SANDBOX_HOST}}",
+    "protocol": "sftp",
+    "port": 22,
+    "username": "{{SANDBOX_USERNAME}}",
+    "secure": true,
+    "remotePath": "/home/{{SANDBOX_USERNAME}}/playgrounds/packages/{{REPO_NAME}}/{{PLAYGROUND_NAME}}",
+    "agent": "$SSH_AUTH_SOCK",
+    "uploadOnSave": true,
+    "ignore": [
+        ".vscode",
+        ".git",
+        "node_modules",
+        "vendor",
+        ".devcontainer"
+    ]
+}
